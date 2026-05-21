@@ -28,7 +28,8 @@ jobs:
           - buildjobs: sourcemod-1.13
             os_version: ubuntu-latest
             identifier: 'Sourcemod Dev'
-            sm-version: '1.13.x'
+            # int64 not supported for now, target a pre int64 SM version
+            sm-version: '1.13.7299'
             package-name: 'sm-dev'
     env:
       TPINCLUDES_PATH: ${{ github.workspace }}/thirdparty/includes
@@ -48,7 +49,7 @@ jobs:
           mkdir -p ${{ env.SCRIPTING_PATH }}/include
 
       - name: Fetch Plugins
-        uses: actions/checkout@v6.0.0
+        uses: actions/checkout@v6.0.2
         with:
           path: plugins
 
@@ -59,20 +60,20 @@ jobs:
           version: ${{ matrix.sm-version }}
 
       - name: Fetch SMLib
-        uses: actions/checkout@v6.0.0
+        uses: actions/checkout@v6.0.2
         with:
           repository: bcserv/smlib
           path: smlib
           ref: transitional_syntax
 
       - name: Fetch Left4DHooks
-        uses: actions/checkout@v6.0.0
+        uses: actions/checkout@v6.0.2
         with:
           repository: SilvDev/Left4DHooks
           path: left4dhooks
 
       - name: Fetch NavBot
-        uses: actions/checkout@v6.0.0
+        uses: actions/checkout@v6.0.2
         with:
           repository: caxanga334/NavBot
           path: navbot
@@ -104,11 +105,11 @@ jobs:
           rsync -rv ${{ github.workspace }}/plugins/scripting/* ${{ env.SCRIPTING_PATH }}/
 
       - name: Fetch Short SHA
-        uses: benjlevesque/short-sha@v3.0
+        uses: benjlevesque/short-sha@v4.0
         id: short-sha
 
       - name: Upload Compiled Plugins Artifact
-        uses: actions/upload-artifact@v5.0.0
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: plugins-${{ matrix.package-name }}-${{ steps.short-sha.outputs.sha }}
           path: |
