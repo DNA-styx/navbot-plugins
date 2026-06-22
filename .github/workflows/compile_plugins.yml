@@ -28,9 +28,9 @@ jobs:
           - buildjobs: sourcemod-1.13
             os_version: ubuntu-latest
             identifier: 'Sourcemod Dev'
-            # int64 not supported for now, target a pre int64 SM version
-            sm-version: '1.13.7299'
+            sm-version: '1.13.x'
             package-name: 'sm-dev'
+            files-to-exclude: "l4d_navbot_compat.sp"
     env:
       TPINCLUDES_PATH: ${{ github.workspace }}/thirdparty/includes
       BUILD_PATH: ${{ github.workspace }}/build/source
@@ -51,7 +51,7 @@ jobs:
           mkdir -p ${{ env.SCRIPTING_PATH }}/include
 
       - name: Fetch Plugins
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.0
         with:
           path: plugins
 
@@ -62,26 +62,26 @@ jobs:
           version: ${{ matrix.sm-version }}
 
       - name: Fetch SMLib
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.0
         with:
           repository: bcserv/smlib
           path: smlib
           ref: transitional_syntax
 
       - name: Fetch Left4DHooks
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.0
         with:
           repository: SilvDev/Left4DHooks
           path: left4dhooks
 
       - name: Fetch SourceMod REST in Pawn Extension
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.0
         with:
           repository: ErikMinekus/sm-ripext
           path: ripext   
 
       - name: Fetch NavBot
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.0
         with:
           repository: caxanga334/NavBot
           path: navbot
@@ -97,6 +97,14 @@ jobs:
       - name: Move Plugin Source Files to Build Directory
         run: |
           rsync -rv ${{ github.workspace }}/plugins/scripting/* ${{ env.BUILD_PATH }}/
+
+      - name: Remove Excluded Plugins
+        if: matrix.files-to-exclude != ''
+        run: |
+          for file in ${{ matrix.files-to-exclude }}; do
+            rm -f $file
+          done
+          ls -lah *
 
       - name: Compile Plugins
         working-directory: ${{ env.BUILD_PATH }}
