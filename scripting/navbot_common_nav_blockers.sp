@@ -10,7 +10,7 @@ public Plugin myinfo =
 	name = "NavBot Common Entities Nav Blocker Module",
 	author = "caxanga334",
 	description = "Implements Nav Auto Blockers for common entities.",
-	version = "1.0.0",
+	version = "1.0.1",
 	url = "https://github.com/caxanga334/navbot-plugins"
 };
 
@@ -71,38 +71,36 @@ void OnRoundRestart()
 	SetupBlockers();
 }
 
-void SharedBlocker_Init(NavBotNavBlocker blocker)
+bool SharedBlocker_Init(NavBotNavBlocker blocker)
 {
 	int entity = blocker.Entity;
 
 	if (entity == INVALID_ENT_REFERENCE)
 	{
-		delete blocker;
-		return;
+		return false;
 	}
 
 	NavBotNavAreaVector vec = NavBotNavMesh.CollectAreasTouchingEntity(entity);
 
 	if (vec.IsEmpty())
 	{
-		delete blocker;
 		delete vec;
-		return;
+		return false;
 	}
 
 	blocker.AddAreas(vec);
 	delete vec;
+	return true;
 }
 
 
-void WallBlocker_Update(NavBotNavBlocker blocker)
+bool WallBlocker_Update(NavBotNavBlocker blocker)
 {
 	int entity = blocker.Entity;
 
 	if (entity == INVALID_ENT_REFERENCE)
 	{
-		delete blocker;
-		return;
+		return false;
 	}
 
 	int solidFlags = GetEntProp(entity, Prop_Data, "m_usSolidFlags");
@@ -115,12 +113,14 @@ void WallBlocker_Update(NavBotNavBlocker blocker)
 	{
 		blocker.UpdateBlockedStatus(NAVBOT_NAV_TEAM_ANY, true);
 	}
+
+	return true;
 }
 
-void SharedBlocker_OnRoundRestart(NavBotNavBlocker blocker)
+bool SharedBlocker_OnRoundRestart(NavBotNavBlocker blocker)
 {
 	StartTimer(false); // nav mesh onroundrestar events may come from nav mesh reloads
-	delete blocker;
+	return false;
 }
 
 void SetupBlockers()

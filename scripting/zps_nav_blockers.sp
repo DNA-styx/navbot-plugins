@@ -10,7 +10,7 @@ public Plugin myinfo =
 	name = "ZPS NavBot Nav Blocker Module",
 	author = "caxanga334",
 	description = "Implements Nav Auto Blockers for ZPS.",
-	version = "1.0.1",
+	version = "1.0.2",
 	url = "https://github.com/caxanga334/navbot-plugins"
 };
 
@@ -95,69 +95,68 @@ void OnRoundRestart()
 	SetupTeamBlockers();
 }
 
-void HumanClipBlocker_Init(NavBotNavBlocker blocker)
+bool HumanClipBlocker_Init(NavBotNavBlocker blocker)
 {
 	int entity = blocker.Entity;
 
 	if (entity == INVALID_ENT_REFERENCE)
 	{
-		delete blocker;
-		return;
+		return false;
 	}
 
 	NavBotNavAreaVector vec = NavBotNavMesh.CollectAreasTouchingEntity(entity);
 
 	if (vec.IsEmpty())
 	{
-		delete blocker;
 		delete vec;
-		return;
+		return false;
 	}
 
 	blocker.AddAreas(vec);
 	blocker.UpdateBlockedStatus(view_as<int>(ZPS_TEAM_SURVIVORS), true);
 	delete vec;
+	return true;
 }
 
-void ZombieClipBlocker_Init(NavBotNavBlocker blocker)
+bool ZombieClipBlocker_Init(NavBotNavBlocker blocker)
 {
 	int entity = blocker.Entity;
 
 	if (entity == INVALID_ENT_REFERENCE)
 	{
-		delete blocker;
-		return;
+		return false;
 	}
 
 	NavBotNavAreaVector vec = NavBotNavMesh.CollectAreasTouchingEntity(entity);
 
 	if (vec.IsEmpty())
 	{
-		delete blocker;
 		delete vec;
-		return;
+		return false;
 	}
 
 	blocker.AddAreas(vec);
 	blocker.UpdateBlockedStatus(view_as<int>(ZPS_TEAM_ZOMBIES), true);
 	delete vec;
+	return true;
 }
 
-void TeamClipShared_Update(NavBotNavBlocker blocker)
+bool TeamClipShared_Update(NavBotNavBlocker blocker)
 {
 	int entity = blocker.Entity;
 
 	if (entity == INVALID_ENT_REFERENCE)
 	{
-		delete blocker;
-		return;
+		return false;
 	}
+
+	return true;
 }
 
-void TeamClipShared_OnRoundRestart(NavBotNavBlocker blocker)
+bool TeamClipShared_OnRoundRestart(NavBotNavBlocker blocker)
 {
 	StartTimer(false); // nav mesh onroundrestar events may come from nav mesh reloads
-	delete blocker;
+	return false;
 }
 
 void SetupTeamBlockers()
