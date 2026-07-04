@@ -65,3 +65,9 @@ Use the `sm_check_spawnpoints` admin command to run the check. Results are writt
 ## ZPS Nav Blockers
 
 Implements automatic nav area blockers for ZPS's `func_humanclip` and `func_zombieclip` entities.    
+
+## NavBot Stuck Logger
+
+Logs bot stuck events to a custom file.    
+Optional per map log file and stuck event count threshold, check auto generated config.   
+ 
