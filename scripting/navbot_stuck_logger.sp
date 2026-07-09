@@ -10,7 +10,7 @@ public Plugin myinfo =
 	name = "NavBot Stuck Logger",
 	author = "caxanga334",
 	description = "Logs bot stuck events to a file.",
-	version = "1.0.0",
+	version = "1.0.1",
 	url = "https://github.com/caxanga334/navbot-plugins"
 };
 
@@ -26,7 +26,7 @@ public void OnPluginStart()
 	AutoExecConfig();
 }
 
-public void OnMapStart()
+public void OnConfigsExecuted()
 {
 	BuildLogFilePath();
 }
