@@ -10,12 +10,13 @@ public Plugin myinfo =
 	name = "SpawnPoint Checker Tool",
 	author = "caxanga334",
 	description = "Checks if player spawnpoints contains a nav area nearby.",
-	version = "1.1.0",
+	version = "1.2.0",
 	url = "https://github.com/caxanga334/navbot-plugins"
 };
 
 ConVar cvar_auto_test = null;
 ConVar cvar_search_radius = null;
+ConVar cvar_get_ground_pos = null;
 float g_Radius;
 char g_map[128];
 char g_logfile[PLATFORM_MAX_PATH];
@@ -50,6 +51,7 @@ public void OnPluginStart()
 {
 	cvar_auto_test = CreateConVar("sm_spchecker_auto", "0", "Checks spawnpoints automatically on map start.");
 	cvar_search_radius = CreateConVar("sm_spchecker_radius", "128", "Radius to search for a nearby nav area.");
+	cvar_get_ground_pos = CreateConVar("sm_spchecker_use_ground_pos", "1", "If enabled, use ground position instead of the spawn point origin for testing, prevents false positive on floating spawn points.");
 	AutoExecConfig();
 
 	RegAdminCmd("sm_check_spawnpoints", Command_CheckSpawnPoints, ADMFLAG_RCON, "Runs the spawnpoint check.");
@@ -130,10 +132,58 @@ void RunChecks()
 	PrintToServer("Checks ended. Tested %i entities with %i failures.", n, f);
 }
 
+bool TraceFilter_GetGround(int entity, int contentsMask)
+{
+	// don't hit players
+	if (entity > 0 && entity <= MaxClients)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+void GetGround(const float original[3], float out[3])
+{
+	if (!cvar_get_ground_pos.BoolValue)
+	{
+		out[0] = original[0];
+		out[1] = original[1];
+		out[2] = original[2];
+		return;
+	}
+
+	float end[3];
+	end[0] = original[0];
+	end[1] = original[1];
+	end[2] = original[2];
+	end[2] -= 16384.0;
+
+	float mins[3];
+	float maxs[3];
+	mins[0] = -12.0;
+	mins[1] = -12.0;
+	mins[2] = 0.0;
+
+	maxs[0] = 12.0;
+	maxs[1] = 12.0;
+	maxs[2] = 36.0;
+
+	Handle tr = TR_TraceHullFilterEx(original, end, mins, maxs, MASK_PLAYERSOLID, TraceFilter_GetGround);
+
+	if (TR_DidHit(tr))
+	{
+		TR_GetEndPosition(out, tr);
+	}
+
+	delete tr;
+}
+
 bool CheckEntity(int entity)
 {
 	float origin[3];
 	GetEntPropVector(entity, Prop_Data, "m_vecOrigin", origin);
+	GetGround(origin, origin);
 	Address area = NavBotNavMesh.GetNearestNavArea(origin, g_Radius, false, true, NAVBOT_NAV_TEAM_ANY);
 
 	if (area == Address_Null)
