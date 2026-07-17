@@ -6,7 +6,7 @@
 #pragma newdecls required
 #pragma semicolon 1
 
-#define PLUGIN_VERSION "1.0.1"
+#define PLUGIN_VERSION "1.1.0"
 
 public Plugin myinfo =
 {
@@ -27,6 +27,7 @@ bool g_isparsingincludes;
 char g_modfolder[128];
 char g_navmeshfilepath[PLATFORM_MAX_PATH];
 char g_placedbfilepath[PLATFORM_MAX_PATH];
+char g_settingsfilepath[PLATFORM_MAX_PATH];
 int g_includesDownloaded;
 ArrayList g_placeIncludes = null;
 
@@ -65,10 +66,10 @@ public void OnLibraryRemoved(const char[] name)
 	}
 }
 
-public void OnMapStart()
+public void OnConfigsExecuted()
 {
 	g_placeIncludes.Clear();
-	CreateTimer(2.0, Timer_CheckNavMesh, _, TIMER_FLAG_NO_MAPCHANGE);
+	CreateTimer(0.5, Timer_CheckNavMesh, _, TIMER_FLAG_NO_MAPCHANGE);
 }
 
 void Timer_CheckNavMesh(Handle timer)

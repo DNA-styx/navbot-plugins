@@ -25,6 +25,11 @@ void DeletePlaceDBFile()
 	DeleteFile(g_placedbfilepath, false);
 }
 
+void DeleteNavSettingsFile()
+{
+	DeleteFile(g_settingsfilepath, false);
+}
+
 void DeletePlaceDBIncludeFile(const char[] file)
 {
 	char path[PLATFORM_MAX_PATH];
@@ -46,6 +51,22 @@ void BuildPathToPlaceDatabaseFile(bool uniquemapname)
 	}
 
 	BuildPath(Path_SM, g_placedbfilepath, sizeof(g_placedbfilepath), "data/navbot/%s/%s_places.cfg", g_modfolder, mapname);
+}
+
+void BuildPathToSettingsFile(bool uniquemapname)
+{
+	char mapname[128];
+
+	if (uniquemapname)
+	{
+		NavBotModInterface.GetCurrentMapName(MAPNAME_UNIQUE, mapname, sizeof(mapname));
+	}
+	else
+	{
+		NavBotModInterface.GetCurrentMapName(MAPNAME_CLEAN, mapname, sizeof(mapname));
+	}
+
+	BuildPath(Path_SM, g_settingsfilepath, sizeof(g_settingsfilepath), "data/navbot/%s/%s_settings.cfg", g_modfolder, mapname);
 }
 
 // Main function to download nav mesh files
@@ -157,6 +178,44 @@ void DownloadNavMeshPlaceDBIncludeFile(const char[] file, int index)
 	{
 
 		request.DownloadFile(path, OnNavMeshPlaceDBIncludeDownloadCompleted, view_as<any>(index));
+	}
+}
+
+void DownloadNavMeshMapSettingsFile(bool skipunique = false)
+{
+	char url[512];
+	cvar_download_url.GetString(url, sizeof(url));
+	char append[256];
+	char map[128];
+	g_wasuniquemap = false;
+
+	// if the current mod uses workshop and the unique map preference is enabled, try downloading a unique map.
+	if (!skipunique && NavBotManager.ModUsesWorkshopMaps() && cvar_prefer_unique_names != null && cvar_prefer_unique_names.BoolValue)
+	{
+		NavBotModInterface.GetCurrentMapName(MAPNAME_UNIQUE, map, sizeof(map));
+		FormatEx(append, sizeof(append), "/%s/%s_settings.cfg", g_modfolder, map);
+		StrCat(url, sizeof(url), append);
+		HTTPRequest request = new HTTPRequest(url);
+		
+		if (request != null)
+		{
+			BuildPathToSettingsFile(true);
+			g_wasuniquemap = true;
+			request.DownloadFile(g_settingsfilepath, OnNavMeshSettingsFileDownloadCompleted);
+		}
+
+		return;
+	}
+
+	NavBotModInterface.GetCurrentMapName(MAPNAME_CLEAN, map, sizeof(map));
+	FormatEx(append, sizeof(append), "/%s/%s_settings.cfg", g_modfolder, map);
+	StrCat(url, sizeof(url), append);
+	HTTPRequest request = new HTTPRequest(url);
+	
+	if (request != null)
+	{
+		BuildPathToSettingsFile(false);
+		request.DownloadFile(g_settingsfilepath, OnNavMeshSettingsFileDownloadCompleted);
 	}
 }
 

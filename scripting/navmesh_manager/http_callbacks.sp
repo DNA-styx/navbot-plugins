@@ -89,5 +89,35 @@ void OnNavMeshFileDownloadRequestCompleted(HTTPStatus status, any value, const c
 
 	// this just helps finding nav mesh files that were downloaded from the net (includes URL and timestamp)
 	CreateAutoDownloadFile();
+	RequestFrame(Frame_DownloadSettingsFile);
+}
+
+
+void OnNavMeshSettingsFileDownloadCompleted(HTTPStatus status, any value, const char[] error)
+{
+	if (status != HTTPStatus_OK)
+	{
+		if (status == HTTPStatus_NotFound)
+		{
+			// if we attempted to download a map with a unique workshop ID, try download again but without the unique ID.
+			if (g_wasuniquemap)
+			{
+				DeleteNavSettingsFile();
+				// try again but don't download maps with unique names.
+				DownloadNavMeshMapSettingsFile(true);
+				return;
+			}
+
+			DeleteNavSettingsFile();
+			RequestFrame(Frame_DownloadPlaceDBFile);
+			return;
+		}
+
+		DeleteNavSettingsFile();
+		LogError("Failed to download nav mesh map settings file. HTTP status code \"%i\". Error: %s", view_as<int>(status), error);
+		RequestFrame(Frame_DownloadPlaceDBFile);
+		return;
+	}
+
 	RequestFrame(Frame_DownloadPlaceDBFile);
 }

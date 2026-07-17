@@ -28,24 +28,7 @@ Convars:
 
 ## NavBot Nav Mesh Manager
 
-A plugin for managing navigation meshes. This plugin can download and/or auto generate a nav mesh for maps that doesn't have one.    
-A config file will be auto generated in `cfg/sourcemod`.    
-All features of this plugin are **OPT-IN**! You have to enable them in the config file.    
-
-ConVars:
-
-- sm_nb_navmesh_manager_auto_download: Enables automatic downloading of nav mesh files.
-- sm_nb_navmesh_manager_download_url: Base HTTP mirror URL. (Do not add a forward slash at the end of the url)
-- sm_nb_navmesh_manager_auto_gen: Enables automatic generation of nav mesh files.
-
-Requires the [SourceMod REST in Pawn Extension](https://github.com/ErikMinekus/sm-ripext).
-
-### NavMesh HTTP Mirror Format
-
-The plugin uses the following format to search for files:    
-If the base url is `navbot.example.com` and the current mod folder is `tf` and the current map is `ctf_2fort`.    
-The final download URL becomes `navbot.example.com/tf/ctf_2fort.smnav`.    
-The plugin also searches for place name database files.    
+[Go to page.](NAVMESH_MANAGER.md)
 
 ## NavBot Left 4 Dead Compatibility
 
@@ -70,4 +53,7 @@ Implements automatic nav area blockers for ZPS's `func_humanclip` and `func_zomb
 
 Logs bot stuck events to a custom file.    
 Optional per map log file and stuck event count threshold, check auto generated config.   
- 
+
+## ZPS Objective Support
+
+[Go to page.](ZPS_OBJ_SUPPORT.md)

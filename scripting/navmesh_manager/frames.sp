@@ -9,6 +9,11 @@ void Frame_DownloadPlaceDBFile()
 	DownloadNavMeshPlaceDB(false);
 }
 
+void Frame_DownloadSettingsFile()
+{
+	DownloadNavMeshMapSettingsFile(false);
+}
+
 void Frame_ParsePlaceDBFile()
 {
 	SMCParser parser = new SMCParser();
