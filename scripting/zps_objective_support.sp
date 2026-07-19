@@ -69,7 +69,7 @@ public void OnConfigsExecuted()
 	}
 
 	NavBotZPSModInterface.ResetObjective();
-	CreateTimer(1.0, Timer_CallThink, .flags = TIMER_FLAG_NO_MAPCHANGE);
+	CreateTimer(1.0, Timer_CallThink, .flags = TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 }
 
 public void OnNavBotModRoundRestart()

@@ -57,3 +57,7 @@ Optional per map log file and stuck event count threshold, check auto generated 
 ## ZPS Objective Support
 
 [Go to page.](ZPS_OBJ_SUPPORT.md)
+
+## NavBot Admin Debug Tool
+
+[Go to page.](ADMIN_DEBUG_TOOL.md)
