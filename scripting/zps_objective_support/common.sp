@@ -23,6 +23,14 @@ void InitObjectives()
 	{
 		ZPOBiotec_Init();
 	}
+	else if (strcmp(map, "zpo_tanker") == 0)
+	{
+		ZPOTanker_Init();
+	}
+	else if (strcmp(map, "zpo_corpsington") == 0)
+	{
+		ZPOCorpsington_Init();
+	}
 	else
 	{
 		LogMessage("Current map \"%s\" is not supported!", map);
