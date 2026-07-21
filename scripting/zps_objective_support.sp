@@ -20,6 +20,7 @@ ConVar cvar_detradius = null;
 ConVar cvar_debug = null;
 float g_DetectionRadius;
 
+#include "zps_objective_support/debugcmds.sp"
 #include "zps_objective_support/utils.sp"
 #include "zps_objective_support/zpo_biotec.sp"
 #include "zps_objective_support/zpo_tanker.sp"
@@ -49,6 +50,8 @@ public void OnPluginStart()
 	HookEvent("endslate", Event_RoundEnd, EventHookMode_PostNoCopy);
 
 	AutoExecConfig();
+
+	RegisterDebugCommands();
 }
 
 void OnDetectionRadiusConvarChanged(ConVar convar, const char[] oldValue, const char[] newValue)
