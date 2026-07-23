@@ -31,6 +31,10 @@ void InitObjectives()
 	{
 		ZPOCorpsington_Init();
 	}
+	else if (strcmp(map, "zpo_keretti") == 0)
+	{
+		ZPOKeretti_Init();
+	}
 	else
 	{
 		LogMessage("Current map \"%s\" is not supported!", map);
