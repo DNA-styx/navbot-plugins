@@ -35,6 +35,10 @@ void InitObjectives()
 	{
 		ZPOKeretti_Init();
 	}
+		else if (strcmp(map, "zpo_harvest") == 0)
+	{
+		ZPOHarvest_Init();
+	}
 	else
 	{
 		LogMessage("Current map \"%s\" is not supported!", map);
