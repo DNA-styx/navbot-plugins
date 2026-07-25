@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_keretti map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.10.0
+ * Module version: 0.10.1
  * Author: Claude.ai guided by DNA.styx
  *
  * Phase order: MineDoor first for the numerical advantage, then Radio and
@@ -83,6 +83,11 @@ void ZPOKeretti_ChatMsgSurvivors(const char[] msg)
 			PrintToChat(client, "\x04[NAV]\x01 %s", msg);
 		}
 	}
+}
+
+void ZPOKeretti_Timer_AnnounceMineDoor(Handle timer)
+{
+	ZPOKeretti_ChatMsgSurvivors("Let's close the mine door first");
 }
 
 void ZPOKeretti_ShuffleFileOrder()
@@ -453,7 +458,7 @@ void ZPOKeretti_Init()
 
 	HookSingleEntityOutput(counter, "OnHitMax", ZPOKeretti_OnFilesDestroyed, true);
 
-	ZPOKeretti_ChatMsgSurvivors("We're closing the mine door first");
+	CreateTimer(3.0, ZPOKeretti_Timer_AnnounceMineDoor, .flags = TIMER_FLAG_NO_MAPCHANGE);
 
 	int mineDoorButton = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "mine_door_button");
 
