@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_tanker map.
  * Intended to be #included by zps_objective_support.sp, alongside zpo_biotec.sp.
  *
- * Module version: 0.14.0
+ * Module version: 0.15.0
  * Author: Claude.ai guided by DNA.styx
  *
  * Phase 1: "Investigate" objective.
@@ -103,8 +103,7 @@ void ZPOTanker_PollLifeboat1Launch()
 		return;
 	}
 
-	const int hammerid = 7783;
-	int boat = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", hammerid);
+	int boat = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "lifeboat1_button");
 
 	if (boat == INVALID_ENT_REFERENCE)
 	{
@@ -124,12 +123,11 @@ void ZPOTanker_PollLifeboat1Launch()
 
 	// No new objective set here: the bot is carried to the island by the
 	// lifeboat train's own movement, not by directed pathing. 
-	const int islandHammerID = 358625;
-	int trigger = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "trigger_multiple", islandHammerID);
+	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "Island-Trigger");
 
 	if (trigger == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_tanker: Failed to find Island-Trigger! Hammer ID: %i", islandHammerID);
+		LogError("zpo_tanker: Failed to find Island-Trigger!");
 		return;
 	}
 
@@ -138,12 +136,11 @@ void ZPOTanker_PollLifeboat1Launch()
 
 void ZPOTanker_OnHatchButtonPressed(const char[] output, int caller, int activator, float delay)
 {
-	const int hammerid = 7783;
-	int boat = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", hammerid);
+	int boat = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "lifeboat1_button");
 
 	if (boat == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_tanker: Failed to find lifeboat1_button! Hammer ID: %i", hammerid);
+		LogError("zpo_tanker: Failed to find lifeboat1_button!");
 		return;
 	}
 
@@ -296,12 +293,11 @@ void ZPOTanker_OnC4ButtonPressed(const char[] output, int caller, int activator,
 
 void ZPOTanker_OnPumpDoor1Open(const char[] output, int caller, int activator, float delay)
 {
-	const int hammerid = 350317;
-	int button = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", hammerid);
+	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "C4-Button");
 
 	if (button == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_tanker: Failed to find C4-Button! Hammer ID: %i", hammerid);
+		LogError("zpo_tanker: Failed to find C4-Button!");
 		return;
 	}
 
@@ -422,12 +418,11 @@ void ZPOTanker_ActivateInvestigate()
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 
-	const int hammerid = 8351;
-	int trigger = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "trigger_once", hammerid);
+	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_once", "Investigate-Trigger");
 
 	if (trigger == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_tanker: Failed to find Investigate-Trigger! Hammer ID: %i", hammerid);
+		LogError("zpo_tanker: Failed to find Investigate-Trigger!");
 		return;
 	}
 
