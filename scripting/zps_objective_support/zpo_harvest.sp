@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_harvest map.
  * Intended to be #included by zps_objective_support.sp, alongside zpo_biotec.sp.
  *
- * Module version: 0.9.1
+ * Module version: 0.9.2
  * Author: Claude.ai guided by DNA.styx
  *
  * Phase 0: "DefendHouse" objective.
@@ -101,14 +101,14 @@
  *   - NAVBOT_ZPS_OBJECTIVE_USE_BUTTON is set immediately at that point even
  *     though the button is still locked, same "let the button's own lock
  *     state gate it" approach as Phase 5's radioobj_radiobutton.
- *   - The timer Handle is stored in s_hSearchlightTimer and killed in
- *     ZPOHarvest_Init() (round start) if still pending -- confirmed via
- *     SourceMod's own docs that timers have no automatic round/map-end
- *     expiry, so an early round end could otherwise let a stale timer fire
- *     mid-way into a new round and wrongly assign the objective early.
- *     Also flagged TIMER_FLAG_NO_MAPCHANGE (matching zpo_corpsington.sp's
- *     equivalent delayed-phase timer) for actual map-change safety, which
- *     the stored handle alone doesn't cover.
+ *   - Uses TIMER_FLAG_NO_MAPCHANGE only (matching zpo_corpsington.sp's
+ *     equivalent delayed-phase timer), no stored Handle. An earlier version
+ *     also stored the Handle and manually KillTimer()'d it in Init() --
+ *     that threw "Invalid timer handle" in testing, since this server's
+ *     round restart triggers whatever cleanup TIMER_FLAG_NO_MAPCHANGE reacts
+ *     to, auto-killing the timer without clearing our stored reference, so
+ *     Init()'s manual KillTimer() then hit an already-freed handle. The flag
+ *     alone is sufficient and is what corpsington relies on too.
  *
  * Escape: not yet implemented (TODO).
  */
@@ -116,7 +116,6 @@
 static bool s_bFuseItemHooked;
 static bool s_bKeysItemHooked;
 static bool s_bBridgeDestroyed;
-static Handle s_hSearchlightTimer;
 
 void ZPOHarvest_OnSearchlightPressed(const char[] output, int caller, int activator, float delay)
 {
@@ -127,8 +126,6 @@ void ZPOHarvest_OnSearchlightPressed(const char[] output, int caller, int activa
 
 Action ZPOHarvest_OnSearchlightTimer(Handle timer)
 {
-	s_hSearchlightTimer = null;
-
 	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "searchlight_activbutton");
 
 	if (button == INVALID_ENT_REFERENCE)
@@ -169,7 +166,7 @@ void ZPOHarvest_OnRadioButtonPressed(const char[] output, int caller, int activa
 	// Obj_DefendBarnEnd, +4s -> Obj_HitTheLightsStart unlocks the button.
 	// ~191s total. Firing at 179s gives bots a ~12s head start walking over,
 	// approximate per DNA.styx (doesn't need to be exact).
-	s_hSearchlightTimer = CreateTimer(179.0, ZPOHarvest_OnSearchlightTimer, .flags = TIMER_FLAG_NO_MAPCHANGE);
+	CreateTimer(179.0, ZPOHarvest_OnSearchlightTimer, .flags = TIMER_FLAG_NO_MAPCHANGE);
 
 	if (s_bBridgeDestroyed)
 	{
@@ -404,12 +401,6 @@ void ZPOHarvest_Init()
 	s_bFuseItemHooked = false;
 	s_bKeysItemHooked = false;
 	s_bBridgeDestroyed = false;
-
-	if (s_hSearchlightTimer != null)
-	{
-		KillTimer(s_hSearchlightTimer);
-		s_hSearchlightTimer = null;
-	}
 
 	int bridge = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_breakable", "BreakBrushT1");
 
