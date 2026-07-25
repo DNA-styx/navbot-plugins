@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_harvest map.
  * Intended to be #included by zps_objective_support.sp, alongside zpo_biotec.sp.
  *
- * Module version: 0.3.0
+ * Module version: 0.9.1
  * Author: Claude.ai guided by DNA.styx
  *
  * Phase 0: "DefendHouse" objective.
@@ -13,22 +13,26 @@
  *   - Hooks bsmnt_door's OnFullyOpen (prop_door_rotating) for the Phase 0 ->
  *     Phase 1 transition.
  *
- * Phase 1: "GetDownToBasement" / "FireUpGenerator" (partial).
- *   - Confirmed with DNA.styx that GetDownToBasement is not a discrete bot task
- *     on this map: once bsmnt_door opens, survivors walk straight to the
- *     generator and press it.
- *   - Skips directly to NAVBOT_ZPS_OBJECTIVE_USE_BUTTON on genobj_spot
- *     (func_button). Hooks its OnPressed for Phase 2.
+ * Phase 1: basement lights.
+ *   - Once bsmnt_door opens, survivors press basementgen_lights (func_button) --
+ *     a cosmetic basement-lighting button (lamps/sparks only, no AngelScript
+ *     objective call). Confirmed via full OnPressed output list. This is NOT
+ *     genobj_spot/FireUpGenerator; that button is gated behind the padlock and
+ *     only reachable much later (see Phase 4).
  *
  * Phase 2: "FindFuse" objective.
+ *   - basementgen_lights' OnPressed hands off to NAVBOT_ZPS_OBJECTIVE_FIND_ITEM
+ *     with item search ID "fuse".
  *   - The fuse item ("Blast_Objective_Fuse") does not exist at map load -- it's
  *     spawned at runtime by the .as script's Obj_FuseTeleport() (called as soon
  *     as the basement door opens), so it can't be hooked the way zpo_biotec.sp
  *     hooks its (map-start-static) keys. ZPOHarvest_PollFuseItem() polls for it
  *     by name each tick, same shape as zpo_tanker.sp's force-spawned buttons.
- *   - Once found: NAVBOT_ZPS_OBJECTIVE_FIND_ITEM with item search ID "fuse".
  *   - Once picked up (OnItemTaken): NAVBOT_ZPS_OBJECTIVE_USE_ITEM targeting
  *     blastobj_setfuse (trigger_useable).
+ *   - Detection radius widened to 800.0 (default g_DetectionRadius is 512) --
+ *     the farthest of the 9 possible fuse spawn locations is ~689 units from
+ *     basementgen_lights, outside the default radius.
  *   - Once planted (blastobj_setfuse's OnUsed): NAVBOT_ZPS_OBJECTIVE_MOVETO to a
  *     hardcoded position clear of the blast radius. The .as script's detonation
  *     sequence has a multi-second delay (spark travel along fuse_track_0-3)
@@ -37,7 +41,7 @@
  *     .as script's Obj_BombDetonate() is actually bound to
  *     (its OnTrigger output) -- a real Hammer signal, no polling needed here.
  *
- * Phase 3: "FireUpGenerator" (Barn Key / padlock).
+ * Phase 3: Barn Key / padlock.
  *   - C4Relay's OnTrigger also means Obj_BombDetonate() has spawned the Barn Key
  *     (genobj_lockkeys) far across the newly-opened tunnel, well outside default
  *     detection radius. NAVBOT_ZPS_OBJECTIVE_MOVETO carries bots to the far end
@@ -51,20 +55,177 @@
  *     polls for it by name each tick.
  *   - Once picked up (OnItemTaken): NAVBOT_ZPS_OBJECTIVE_USE_ITEM targeting
  *     trig_keys (trigger_useable), the padlock's usable socket. Its OnUsed
- *     calls the .as script's GenRoomUnlocked(), which opens genobj_door,
- *     clearing the path to genobj_spot (already handled by Phase 1).
+ *     calls the .as script's GenRoomUnlocked(), which opens genobj_door.
  *
- * RadioMilitary onward: not yet implemented (TODO).
+ * Phase 4: "FireUpGenerator".
+ *   - genobj_door opening clears the path to genobj_spot (func_button), the
+ *     real FireUpGenerator button -- OnPressed on it is what the .as script
+ *     binds to Obj_FireUpGeneratorEnd(). NAVBOT_ZPS_OBJECTIVE_USE_BUTTON.
+ *
+ * Phase 5: "RadioMilitary".
+ *   - genobj_spot's OnPressed hands off directly to NAVBOT_ZPS_OBJECTIVE_
+ *     USE_BUTTON on radioobj_radiobutton (func_button), whose OnPressed is
+ *     bound to Obj_RadioMilitaryEnd(). The .as script only unlocks this button
+ *     8.6s after the generator starts (Obj_RadioMilitaryStart()); no special
+ *     handling needed on our end, the button's own locked state gates it.
+ *
+ * Phase 6: bridge (not one of the named .as objectives, but confirmed by
+ * DNA.styx as beneficial -- destroying it blocks a zombie route into the barn).
+ *   - Placed after RadioMilitary per DNA.styx's call, though source shows the
+ *     beacon (beacon_obj3_bridge) actually turns on back at Obj_BombDetonate(),
+ *     so it's technically available earlier -- not gating anything else in our
+ *     chain either way.
+ *   - Destroy target confirmed via BreakBrushT1 (func_breakable)'s own OnBreak
+ *     output list, which kills beacon_obj3_bridge itself.
+ *     NAVBOT_ZPS_OBJECTIVE_DESTROY_ENTITY + SetObjectiveGenericTargetEntity.
+ *   - BreakBrushT1 is hooked once early, in Init(), purely to set
+ *     s_bBridgeDestroyed if a human player breaks it before bots ever reach
+ *     this phase (e.g. during an earlier phase). ZPOHarvest_OnRadioButton-
+ *     Pressed() checks that flag (and re-checks by name, belt and braces)
+ *     before assigning DESTROY_ENTITY, and skips straight to the next phase
+ *     if it's already gone.
+ *
+ * Phase 7: "DefendBarn" / HitTheLights searchlight.
+ *   - DefendBarn itself is passive (bots just defend, same as DefendHouse) --
+ *     Obj_DefendBarnEnd() is purely automatic, fired by the rescue truck's
+ *     own path_track (rescuevehicle_path_2's OnPass), not a bot task.
+ *   - Rather than hooking that path_track, ZPOHarvest_OnRadioButtonPressed()
+ *     starts a plain SourcePawn CreateTimer(179.0, ...) the moment the radio
+ *     is pressed. That number comes from the .as script's own schedule: 23s
+ *     to Obj_DefendBarnStart, +157s (flTA) to the truck moving, +~7s driving
+ *     (func_tanktrain startspeed 250 u/s over ~1756 units of track to
+ *     rescuevehicle_path_2), +4s to Obj_HitTheLightsStart unlocking the
+ *     button = ~191s total. Firing at 179s gives bots a ~12s head start
+ *     walking to searchlight_activbutton before it's actually unlockable --
+ *     approximate per DNA.styx, doesn't need to be exact.
+ *   - NAVBOT_ZPS_OBJECTIVE_USE_BUTTON is set immediately at that point even
+ *     though the button is still locked, same "let the button's own lock
+ *     state gate it" approach as Phase 5's radioobj_radiobutton.
+ *   - The timer Handle is stored in s_hSearchlightTimer and killed in
+ *     ZPOHarvest_Init() (round start) if still pending -- confirmed via
+ *     SourceMod's own docs that timers have no automatic round/map-end
+ *     expiry, so an early round end could otherwise let a stale timer fire
+ *     mid-way into a new round and wrongly assign the objective early.
+ *     Also flagged TIMER_FLAG_NO_MAPCHANGE (matching zpo_corpsington.sp's
+ *     equivalent delayed-phase timer) for actual map-change safety, which
+ *     the stored handle alone doesn't cover.
+ *
+ * Escape: not yet implemented (TODO).
  */
 
 static bool s_bFuseItemHooked;
 static bool s_bKeysItemHooked;
+static bool s_bBridgeDestroyed;
+static Handle s_hSearchlightTimer;
 
-void ZPOHarvest_OnKeysUsed(const char[] output, int caller, int activator, float delay)
+void ZPOHarvest_OnSearchlightPressed(const char[] output, int caller, int activator, float delay)
 {
 	NavBotZPSModInterface.ResetObjective();
 
-	// TODO: RadioMilitary phase.
+	// TODO: Escape phase.
+}
+
+Action ZPOHarvest_OnSearchlightTimer(Handle timer)
+{
+	s_hSearchlightTimer = null;
+
+	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "searchlight_activbutton");
+
+	if (button == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_harvest: Failed to find searchlight_activbutton!");
+		return Plugin_Stop;
+	}
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveUseButton(button);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
+
+	HookSingleEntityOutput(button, "OnPressed", ZPOHarvest_OnSearchlightPressed, true);
+
+	return Plugin_Stop;
+}
+
+void ZPOHarvest_OnBridgeDestroyedEarly(const char[] output, int caller, int activator, float delay)
+{
+	// May fire before bots are ever assigned this phase (e.g. a human player
+	// breaks it during an earlier phase). Just record it -- ZPOHarvest_On-
+	// RadioButtonPressed checks this flag before assigning DESTROY_ENTITY.
+	s_bBridgeDestroyed = true;
+}
+
+void ZPOHarvest_OnBridgeDestroyed(const char[] output, int caller, int activator, float delay)
+{
+	NavBotZPSModInterface.ResetObjective();
+
+	// Passive -- bots just defend normally until ZPOHarvest_OnSearchlightTimer
+	// (started in ZPOHarvest_OnRadioButtonPressed) sends them to the button.
+}
+
+void ZPOHarvest_OnRadioButtonPressed(const char[] output, int caller, int activator, float delay)
+{
+	// .as timeline from here: 23s -> Obj_DefendBarnStart, +157s (flTA) ->
+	// truck starts moving, +~7s drive (250 u/s over ~1756 units of track) ->
+	// Obj_DefendBarnEnd, +4s -> Obj_HitTheLightsStart unlocks the button.
+	// ~191s total. Firing at 179s gives bots a ~12s head start walking over,
+	// approximate per DNA.styx (doesn't need to be exact).
+	s_hSearchlightTimer = CreateTimer(179.0, ZPOHarvest_OnSearchlightTimer, .flags = TIMER_FLAG_NO_MAPCHANGE);
+
+	if (s_bBridgeDestroyed)
+	{
+		ZPOHarvest_OnBridgeDestroyed(output, caller, activator, delay);
+		return;
+	}
+
+	int entity = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_breakable", "BreakBrushT1");
+
+	if (entity == INVALID_ENT_REFERENCE)
+	{
+		// Already broken (s_bBridgeDestroyed missed it, e.g. hook order at
+		// round start) -- treat the same as the flag check above.
+		ZPOHarvest_OnBridgeDestroyed(output, caller, activator, delay);
+		return;
+	}
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(entity);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_DESTROY_ENTITY);
+
+	HookSingleEntityOutput(entity, "OnBreak", ZPOHarvest_OnBridgeDestroyed, true);
+}
+
+void ZPOHarvest_OnGeneratorButtonPressed(const char[] output, int caller, int activator, float delay)
+{
+	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "radioobj_radiobutton");
+
+	if (button == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_harvest: Failed to find radioobj_radiobutton!");
+		return;
+	}
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveUseButton(button);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
+
+	HookSingleEntityOutput(button, "OnPressed", ZPOHarvest_OnRadioButtonPressed, true);
+}
+
+void ZPOHarvest_OnKeysUsed(const char[] output, int caller, int activator, float delay)
+{
+	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "genobj_spot");
+
+	if (button == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_harvest: Failed to find genobj_spot!");
+		return;
+	}
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveUseButton(button);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
+
+	HookSingleEntityOutput(button, "OnPressed", ZPOHarvest_OnGeneratorButtonPressed, true);
 }
 
 void ZPOHarvest_OnKeysItemTaken(const char[] output, int caller, int activator, float delay)
@@ -195,11 +356,13 @@ void ZPOHarvest_PollFuseItem()
 	HookSingleEntityOutput(item, "OnItemTaken", ZPOHarvest_OnFuseItemTaken, true);
 }
 
-void ZPOHarvest_OnGeneratorButtonPressed(const char[] output, int caller, int activator, float delay)
+void ZPOHarvest_OnBasementLightsPressed(const char[] output, int caller, int activator, float delay)
 {
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveItemSearchID("fuse");
-	NavBotZPSModInterface.SetObjectiveDetectionRadius(g_DetectionRadius);
+	// g_vecFuseLocations' farthest point is ~689 units from here -- wider than
+	// the default g_DetectionRadius (512).
+	NavBotZPSModInterface.SetObjectiveDetectionRadius(800.0);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_FIND_ITEM);
 
 	s_bFuseItemHooked = false;
@@ -207,11 +370,11 @@ void ZPOHarvest_OnGeneratorButtonPressed(const char[] output, int caller, int ac
 
 void ZPOHarvest_OnBasementDoorOpen(const char[] output, int caller, int activator, float delay)
 {
-	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "genobj_spot");
+	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "basementgen_lights");
 
 	if (button == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_harvest: Failed to find genobj_spot!");
+		LogError("zpo_harvest: Failed to find basementgen_lights!");
 		return;
 	}
 
@@ -219,13 +382,20 @@ void ZPOHarvest_OnBasementDoorOpen(const char[] output, int caller, int activato
 	NavBotZPSModInterface.SetObjectiveUseButton(button);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 
-	HookSingleEntityOutput(button, "OnPressed", ZPOHarvest_OnGeneratorButtonPressed, true);
+	HookSingleEntityOutput(button, "OnPressed", ZPOHarvest_OnBasementLightsPressed, true);
 }
 
 void ZPOHarvest_Think()
 {
-	ZPOHarvest_PollFuseItem();
-	ZPOHarvest_PollKeysItem();
+	if (!s_bFuseItemHooked)
+	{
+		ZPOHarvest_PollFuseItem();
+	}
+
+	if (!s_bKeysItemHooked)
+	{
+		ZPOHarvest_PollKeysItem();
+	}
 }
 
 void ZPOHarvest_Init()
@@ -233,6 +403,24 @@ void ZPOHarvest_Init()
 	g_ThinkFunc = ZPOHarvest_Think;
 	s_bFuseItemHooked = false;
 	s_bKeysItemHooked = false;
+	s_bBridgeDestroyed = false;
+
+	if (s_hSearchlightTimer != null)
+	{
+		KillTimer(s_hSearchlightTimer);
+		s_hSearchlightTimer = null;
+	}
+
+	int bridge = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_breakable", "BreakBrushT1");
+
+	if (bridge == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_harvest: Failed to find BreakBrushT1!");
+	}
+	else
+	{
+		HookSingleEntityOutput(bridge, "OnBreak", ZPOHarvest_OnBridgeDestroyedEarly, true);
+	}
 
 	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "prop_door_rotating", "bsmnt_door");
 
