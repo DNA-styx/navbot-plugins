@@ -4,8 +4,30 @@
  * NavBot ZPS objective support module for the zpo_keretti map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.10.1
+ * Module version: 0.11.1
  * Author: Claude.ai guided by DNA.styx
+ *
+ * Side task: at the same 3s mark as the mine door announcement, one random
+ * survivor bot is sent via the general NavBot plugin command API (not the
+ * ZPS objective system used everywhere else in this file) to press the
+ * hidden_door unlock button (func_button, hammer ID 372483, no targetname)
+ * then +use hidden_door itself (func_door_rotating, unique targetname,
+ * confirmed against the map), to collect the guns/ammo inside. Uses
+ * NAVBOT_PLUGINCMD_USE_ENTITY, polled via IsRunningPluginCommand() in
+ * Think() to sequence button -> door. Nothing further happens once the
+ * door step finishes.
+ * Unconfirmed: how SendPluginCommand interacts with a bot that also has a
+ * NavBotZPSModInterface objective active at the same time - untested.
+ *
+ * The initial "mine door" chat message is delayed 3s via timer rather than
+ * sent immediately in Init(). ZPS moves every joining player onto survivors
+ * first, then reassigns some to zombies - if the message fires right at
+ * Init(), players who are about to become zombies can still be counted as
+ * survivor-team at that instant and see it. The 3s delay is a guess, not
+ * confirmed against ZPS's actual team-assignment timing - adjust if it's
+ * still catching zombies, or too slow for a message meant to fire at round
+ * start. The later Radio/Files chat messages aren't affected, since teams
+ * are already settled by the time those phases start.
  *
  * Phase order: MineDoor first for the numerical advantage, then Radio and
  * Files in a random order, then Finale.
@@ -74,6 +96,15 @@ static int s_ParallelOrder[2] = { 0, 1 }; // 0 = Radio, 1 = Files
 static int s_ParallelIndex = 0;
 static int s_FileHammerIDs[4] = { 269523, 269836, 269880, 269862 };
 
+// Side-task step values
+#define SIDETASK_NONE 0
+#define SIDETASK_AT_BUTTON 1
+#define SIDETASK_AT_DOOR 2
+
+static bool s_SideTaskActive = false;
+static int s_SideTaskStep = SIDETASK_NONE;
+static int s_SideTaskBotRef = INVALID_ENT_REFERENCE;
+
 void ZPOKeretti_ChatMsgSurvivors(const char[] msg)
 {
 	for (int client = 1; client <= MaxClients; client++)
@@ -85,9 +116,87 @@ void ZPOKeretti_ChatMsgSurvivors(const char[] msg)
 	}
 }
 
+void ZPOKeretti_StartSideTask()
+{
+	int candidates[MAXPLAYERS + 1];
+	int count = 0;
+
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (IsClientInGame(client) && IsFakeClient(client) && GetClientTeam(client) == 2)
+		{
+			candidates[count] = client;
+			count++;
+		}
+	}
+
+	if (count == 0)
+	{
+		// No survivor bots in game yet, skip the side task entirely.
+		return;
+	}
+
+	int chosen = candidates[GetRandomInt(0, count - 1)];
+
+	int button = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", 372483);
+
+	if (button == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_keretti: Failed to find hidden_door unlock func_button! Hammer ID: 372483");
+		return;
+	}
+
+	NavBot bot = view_as<NavBot>(chosen);
+	bot.SendPluginCommand(NAVBOT_PLUGINCMD_USE_ENTITY, button);
+
+	s_SideTaskBotRef = EntIndexToEntRef(chosen);
+	s_SideTaskStep = SIDETASK_AT_BUTTON;
+	s_SideTaskActive = true;
+}
+
+void ZPOKeretti_UpdateSideTask()
+{
+	int client = EntRefToEntIndex(s_SideTaskBotRef);
+
+	if (client == INVALID_ENT_REFERENCE || !IsClientInGame(client) || !IsPlayerAlive(client))
+	{
+		s_SideTaskActive = false;
+		return;
+	}
+
+	NavBot bot = view_as<NavBot>(client);
+	Address behavior = bot.GetBehaviorInterface();
+
+	if (NavBotBehaviorInterface.IsRunningPluginCommand(behavior))
+	{
+		// Still walking to / using the current target, check again next tick.
+		return;
+	}
+
+	if (s_SideTaskStep == SIDETASK_AT_BUTTON)
+	{
+		int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door_rotating", "hidden_door");
+
+		if (door == INVALID_ENT_REFERENCE)
+		{
+			LogError("zpo_keretti: Failed to find hidden_door func_door_rotating!");
+			s_SideTaskActive = false;
+			return;
+		}
+
+		bot.SendPluginCommand(NAVBOT_PLUGINCMD_USE_ENTITY, door);
+		s_SideTaskStep = SIDETASK_AT_DOOR;
+		return;
+	}
+
+	// SIDETASK_AT_DOOR finished - side task is done, no further action needed.
+	s_SideTaskActive = false;
+}
+
 void ZPOKeretti_Timer_AnnounceMineDoor(Handle timer)
 {
 	ZPOKeretti_ChatMsgSurvivors("Let's close the mine door first");
+	ZPOKeretti_StartSideTask();
 }
 
 void ZPOKeretti_ShuffleFileOrder()
@@ -375,6 +484,11 @@ void ZPOKeretti_Think()
 	{
 		ZPOKeretti_UpdateFileObjective();
 	}
+
+	if (s_SideTaskActive)
+	{
+		ZPOKeretti_UpdateSideTask();
+	}
 }
 
 void ZPOKeretti_Init()
@@ -387,6 +501,9 @@ void ZPOKeretti_Init()
 	s_WarehouseDoorDone = false;
 	s_RadioDone = false;
 	s_FilesDone = false;
+	s_SideTaskActive = false;
+	s_SideTaskStep = SIDETASK_NONE;
+	s_SideTaskBotRef = INVALID_ENT_REFERENCE;
 
 	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door", "mine_door");
 
