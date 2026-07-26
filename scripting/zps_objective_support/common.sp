@@ -39,6 +39,10 @@ void InitObjectives()
 	{
 		ZPOHarvest_Init();
 	}
+		else if (strcmp(map, "zpo_murksville") == 0)
+	{
+		ZPOMurksville_Init();
+	}
 	else
 	{
 		LogMessage("Current map \"%s\" is not supported!", map);
