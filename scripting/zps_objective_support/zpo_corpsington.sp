@@ -1,55 +1,35 @@
-/*
-
-	ZPO Corpsington - NavBot Objective Support Module
-	Author: Claude.ai guided by DNA.styx
-
-	Phase 1: BreakIntoOffice
-	Destroy 3x wooden_barricade props to unlock breakdoor1 / breakdoor2.
-	All 3 props share the same targetname, so they are resolved individually
-	via Hammer ID and destroyed one at a time (DESTROY_ENTITY only supports
-	a single target) - this is the one case in the file that needs
-	FindEntityOfHammerID rather than FindNamedEntityOfClassname. Completion
-	is confirmed via breakdoor1's OnFullyOpen output (hooked in Init())
-	rather than inferred from the barricade poll finding nothing left -
-	breakdoor1 is unique and always present, so it's a more reliable signal
-	than our own inference.
-
-	Phase 2: OpenWarehouse
-	Press wh_button, then wait (objective reset, no goal set) until
-	big_wh_door1 is fully open.
-
-	Phase 3: CutPower
-	Once big_wh_door1 is fully open, destroy fuse_box_breakable.
-
-	Phase 4: WaitForPowerToFail
-	The floor into the upper area isn't there yet - CutPowerTimer() in the
-	.as script runs a ~33 second internal countdown with no entity I/O to
-	hook. Bots are moved to a safe staging position immediately, then a
-	matching 33s timer moves them toward enter_2nd_floor.
-
-	Phase 5: GetInsideUpperFloor
-	MOVETO enter_2nd_floor's origin (StartDisabled until the .as timer
-	finishes) and hook its OnStartTouch directly - no further guessed
-	delay needed once bots are standing on it.
-
-	Phase 6/7: GetToStreet / PushGenerator
-	street_test and blockcart_trigger are not used. toolButton (parented to
-	pushcart_model, which moves with pushcart_train along the track) is
-	polled every Think() tick: while m_bLocked is set, bots get a MOVETO
-	to its current m_vecAbsOrigin (not m_vecOrigin, since that's local to
-	its parent for a parented entity) so they stay near it as the cart
-	moves - they aren't expected to actually push it, PCSpeed() scaling by
-	player count still requires humans. Once PCFinish() clears m_bLocked,
-	bots are assigned USE_BUTTON and press it themselves.
-
-	Phase 8: CloseDoors
-	GenLever() unlocks safehouse_button 6 seconds after toolButton is used,
-	with no entity I/O fired in between. Think() polls m_bLocked until it
-	clears, then assigns USE_BUTTON.
-
-	Version: 0.10.0
-
-*/
+/**
+ * ZPO CORPSINGTON - NAVBOT OBJECTIVE SUPPORT MODULE
+ * Author: Claude.ai guided by DNA.styx
+ * Version: 0.10.0
+ *
+ * Phase 1: BreakIntoOffice
+ * Destroy 3x wooden_barricade props to unlock breakdoor1 / breakdoor2. All 3 props share the same targetname, so they
+ * are resolved individually via Hammer ID and destroyed one at a time (DESTROY_ENTITY only supports a single target).
+ * Completion is confirmed via breakdoor1's OnFullyOpen output.
+ *
+ * Phase 2: OpenWarehouse
+ * Press wh_button, then wait (objective reset, no goal set) until big_wh_door1 is fully open.
+ *
+ * Phase 3: CutPower
+ * Once big_wh_door1 is open, destroy fuse_box_breakable.
+ *
+ * Phase 4: WaitForPowerToFail
+ * The container 'bridge' floor into the upper area isn't there yet, bots are moved to a safe staging position
+ * immediately, then a matching 33s timer moves them toward enter_2nd_floor.
+ *
+ * Phase 5: GetInsideUpperFloor
+ * MOVETO enter_2nd_floor's origin and hook its OnStartTouch directly.
+ *
+ * Phase 6/7: GetToStreet / PushGenerator
+ * toolButton (parented to pushcart_model, which moves with pushcart_train along the track) is polled every Think()
+ * tick: while m_bLocked is set, bots get a MOVETO to its current m_vecAbsOrigin so they stay near it as the cart
+ * moves. Once PCFinish() clears m_bLocked, bots are assigned USE_BUTTON and press it themselves.
+ *
+ * Phase 8: CloseDoors
+ * GenLever() unlocks safehouse_button 6 seconds after toolButton is used, with no entity I/O fired in between.
+ * Think() polls m_bLocked until it clears, then assigns USE_BUTTON.
+ */
 
 enum
 {

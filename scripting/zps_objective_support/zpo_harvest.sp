@@ -14,40 +14,32 @@
  *     Phase 1 transition.
  *
  * Phase 1: basement lights.
- *   - Once bsmnt_door opens, survivors press basementgen_lights (func_button) --
- *     a cosmetic basement-lighting button (lamps/sparks only, no AngelScript
- *     objective call). Confirmed via full OnPressed output list. This is NOT
- *     genobj_spot/FireUpGenerator; that button is gated behind the padlock and
- *     only reachable much later (see Phase 4).
+ *   - Once bsmnt_door opens, survivors press basementgen_lights (func_button). Confirmed via full OnPressed output list. 
  *
  * Phase 2: "FindFuse" objective.
  *   - basementgen_lights' OnPressed hands off to NAVBOT_ZPS_OBJECTIVE_FIND_ITEM
  *     with item search ID "fuse".
  *   - The fuse item ("Blast_Objective_Fuse") does not exist at map load -- it's
  *     spawned at runtime by the .as script's Obj_FuseTeleport() (called as soon
- *     as the basement door opens), so it can't be hooked the way zpo_biotec.sp
- *     hooks its (map-start-static) keys. ZPOHarvest_PollFuseItem() polls for it
- *     by name each tick, same shape as zpo_tanker.sp's force-spawned buttons.
+ *     as the basement door opens). ZPOHarvest_PollFuseItem() polls for it
+ *     by name each tick.
  *   - Once picked up (OnItemTaken): NAVBOT_ZPS_OBJECTIVE_USE_ITEM targeting
  *     blastobj_setfuse (trigger_useable).
  *   - Detection radius widened to 800.0 (default g_DetectionRadius is 512) --
  *     the farthest of the 9 possible fuse spawn locations is ~689 units from
  *     basementgen_lights, outside the default radius.
  *   - Once planted (blastobj_setfuse's OnUsed): NAVBOT_ZPS_OBJECTIVE_MOVETO to a
- *     hardcoded position clear of the blast radius. The .as script's detonation
- *     sequence has a multi-second delay (spark travel along fuse_track_0-3)
- *     before the wall actually blows, giving bots time to clear.
+ *     hardcoded position clear of the blast radius.
+ *     before the wall actually blows.
  *   - Wall detonation is confirmed via C4Relay (logic_relay), which is what the
  *     .as script's Obj_BombDetonate() is actually bound to
- *     (its OnTrigger output) -- a real Hammer signal, no polling needed here.
+ *     (its OnTrigger output)..
  *
  * Phase 3: Barn Key / padlock.
  *   - C4Relay's OnTrigger also means Obj_BombDetonate() has spawned the Barn Key
- *     (genobj_lockkeys) far across the newly-opened tunnel, well outside default
- *     detection radius. NAVBOT_ZPS_OBJECTIVE_MOVETO carries bots to the far end
+ *     (genobj_lockkeys) far across the newly-opened tunnel. NAVBOT_ZPS_OBJECTIVE_MOVETO carries bots to the far end
  *     of the tunnel first (hardcoded position past genobj_powerout).
- *   - genobj_powerout (trigger_once, human-only filter -- confirmed this still
- *     fires for bots, since the whole objective chain depends on it) confirms
+ *   - genobj_powerout (trigger_once, human-only filter) confirms
  *     arrival; hooking its OnTrigger hands off to NAVBOT_ZPS_OBJECTIVE_FIND_ITEM
  *     with item search ID "keys".
  *   - Same as the fuse: genobj_lockkeys does not exist at map load (spawned by
@@ -69,48 +61,42 @@
  *     8.6s after the generator starts (Obj_RadioMilitaryStart()); no special
  *     handling needed on our end, the button's own locked state gates it.
  *
- * Phase 6: bridge (not one of the named .as objectives, but confirmed by
- * DNA.styx as beneficial -- destroying it blocks a zombie route into the barn).
- *   - Placed after RadioMilitary per DNA.styx's call, though source shows the
+ * Phase 6: bridge (destroying it blocks a zombie route into the barn).
+ *   - Placed after RadioMilitary, though source shows the
  *     beacon (beacon_obj3_bridge) actually turns on back at Obj_BombDetonate(),
  *     so it's technically available earlier -- not gating anything else in our
  *     chain either way.
  *   - Destroy target confirmed via BreakBrushT1 (func_breakable)'s own OnBreak
- *     output list, which kills beacon_obj3_bridge itself.
+ *     output list.
  *     NAVBOT_ZPS_OBJECTIVE_DESTROY_ENTITY + SetObjectiveGenericTargetEntity.
  *   - BreakBrushT1 is hooked once early, in Init(), purely to set
  *     s_bBridgeDestroyed if a human player breaks it before bots ever reach
- *     this phase (e.g. during an earlier phase). ZPOHarvest_OnRadioButton-
+ *     this phase. ZPOHarvest_OnRadioButton-
  *     Pressed() checks that flag (and re-checks by name, belt and braces)
  *     before assigning DESTROY_ENTITY, and skips straight to the next phase
  *     if it's already gone.
  *
  * Phase 7: "DefendBarn" / HitTheLights searchlight.
- *   - DefendBarn itself is passive (bots just defend, same as DefendHouse) --
+ *   - DefendBarn itself is passive (bots just defend) --
  *     Obj_DefendBarnEnd() is purely automatic, fired by the rescue truck's
- *     own path_track (rescuevehicle_path_2's OnPass), not a bot task.
+ *     own path_track (rescuevehicle_path_2's OnPass).
  *   - Rather than hooking that path_track, ZPOHarvest_OnRadioButtonPressed()
  *     starts a plain SourcePawn CreateTimer(179.0, ...) the moment the radio
  *     is pressed. That number comes from the .as script's own schedule: 23s
  *     to Obj_DefendBarnStart, +157s (flTA) to the truck moving, +~7s driving
- *     (func_tanktrain startspeed 250 u/s over ~1756 units of track to
- *     rescuevehicle_path_2), +4s to Obj_HitTheLightsStart unlocking the
+ , +4s to Obj_HitTheLightsStart unlocking the
  *     button = ~191s total. Firing at 179s gives bots a ~12s head start
- *     walking to searchlight_activbutton before it's actually unlockable --
- *     approximate per DNA.styx, doesn't need to be exact.
+ *     walking to searchlight_activbutton before it's actually unlockable.
  *   - NAVBOT_ZPS_OBJECTIVE_USE_BUTTON is set immediately at that point even
- *     though the button is still locked, same "let the button's own lock
- *     state gate it" approach as Phase 5's radioobj_radiobutton.
- *   - Uses TIMER_FLAG_NO_MAPCHANGE only (matching zpo_corpsington.sp's
- *     equivalent delayed-phase timer), no stored Handle. An earlier version
+ *     though the button is still locked.
+ *   - Uses TIMER_FLAG_NO_MAPCHANGE only, no stored Handle. An earlier version
  *     also stored the Handle and manually KillTimer()'d it in Init() --
  *     that threw "Invalid timer handle" in testing, since this server's
  *     round restart triggers whatever cleanup TIMER_FLAG_NO_MAPCHANGE reacts
  *     to, auto-killing the timer without clearing our stored reference, so
  *     Init()'s manual KillTimer() then hit an already-freed handle. The flag
- *     alone is sufficient and is what corpsington relies on too.
+ *     alone is sufficient.
  *
- * Escape: not yet implemented (TODO).
  */
 
 static bool s_bFuseItemHooked;

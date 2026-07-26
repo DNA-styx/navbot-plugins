@@ -7,45 +7,16 @@
  * Module version: 0.11.1
  * Author: Claude.ai guided by DNA.styx
  *
- * Side task: at the same 3s mark as the mine door announcement, one random
- * survivor bot is sent via the general NavBot plugin command API (not the
- * ZPS objective system used everywhere else in this file) to press the
- * hidden_door unlock button (func_button, hammer ID 372483, no targetname)
- * then +use hidden_door itself (func_door_rotating, unique targetname,
- * confirmed against the map), to collect the guns/ammo inside. Uses
- * NAVBOT_PLUGINCMD_USE_ENTITY, polled via IsRunningPluginCommand() in
- * Think() to sequence button -> door. Nothing further happens once the
- * door step finishes.
- * Unconfirmed: how SendPluginCommand interacts with a bot that also has a
- * NavBotZPSModInterface objective active at the same time - untested.
- *
- * The initial "mine door" chat message is delayed 3s via timer rather than
- * sent immediately in Init(). ZPS moves every joining player onto survivors
- * first, then reassigns some to zombies - if the message fires right at
- * Init(), players who are about to become zombies can still be counted as
- * survivor-team at that instant and see it. The 3s delay is a guess, not
- * confirmed against ZPS's actual team-assignment timing - adjust if it's
- * still catching zombies, or too slow for a message meant to fire at round
- * start. The later Radio/Files chat messages aren't affected, since teams
- * are already settled by the time those phases start.
- *
  * Phase order: MineDoor first for the numerical advantage, then Radio and
  * Files in a random order, then Finale.
  *
+ * Side task: 3s into the round, one random survivor bot is sent via the
+ * general NavBot plugin command API to press the hidden_door unlock button
+ * and then +use hidden_door itself to collect the guns/ammo inside.
+ *
  * Real players can complete any of MineDoor/WarehouseDoor/Radio/Files
  * independently of the bot script, so every completion/reversion signal
- * (mine_door, door_trigger_survivors, door_trigger_zombies, WarehouseDoor
- * button, obj2_button, RadioCapturePoint, destroy_stuff_counter) is hooked
- * upfront in Init(), not lazily when the script reaches that phase. Each
- * hook callback records a s_*Done flag regardless of what phase the script
- * currently thinks it's in, and only calls ResetObjective()/reassigns the
- * bot's current objective when s_CurrentPhase matches - otherwise a human
- * finishing something out of order would yank the bot off whatever it's
- * actually doing. Each StartX phase function checks its own s_*Done flag
- * before assigning the bot to work on it, and skips straight to the next
- * step if it's already done. WarehouseDoor specifically needs this: its
- * button has "wait" "-1" (one-shot, confirmed from source), so a hook
- * registered late would simply miss an early human press for good.
+ * is hooked upfront in Init().
  *
  * MineDoor is a two-button chain: mine_door_button unlocks button_mine_door.
  * Zombies can revert an in-progress (not yet fully open) door via
@@ -60,11 +31,10 @@
  *
  * WarehouseDoor is a func_tracktrain with no completion output, so once its
  * button is pressed the bot roams (ResetObjective), then a 10s timer starts
- * the Radio phase - no wait for the door to actually finish opening. Only
- * runs ahead of Radio.
+ * the Radio phase.
  *
- * RadioCapturePoint is a hold-in-zone capture (allowdrain 1), approximated
- * as a single MOVETO.
+ * RadioCapturePoint is a hold-in-zone capture, approximated as a single
+ * MOVETO.
  *
  * Files is 4x func_breakable file cabinets, resolved by Hammer ID and
  * destroyed one at a time, polled every Think() tick while active.
@@ -72,11 +42,10 @@
  * order is shuffled once when the phase starts.
  *
  * Finale: button_fire_me starts locked - it's only unlocked once
- * zombiecage_1_trap_1_flamejet_wheel_1 (a func_door_rotating valve wheel,
- * not a func_button) is fully opened. Targets the wheel directly with
- * USE_BUTTON, hooks its OnFullyOpen, then reassigns to button_fire_me - now
- * genuinely unlocked by the map's own I/O. No further hook needed after
- * that press; it cascades into game_win_human,EndGame on the map's own I/O.
+ * zombiecage_1_trap_1_flamejet_wheel_1 (a func_door_rotating valve wheel)
+ * is fully opened. The bot turns the wheel first, then presses
+ * button_fire_me once it's unlocked, which cascades into
+ * game_win_human,EndGame on the map's own I/O.
  */
 
 // s_CurrentPhase values

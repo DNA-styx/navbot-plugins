@@ -4,45 +4,39 @@
  * NavBot ZPS objective support module for the zpo_tanker map.
  * Intended to be #included by zps_objective_support.sp, alongside zpo_biotec.sp.
  *
- * Module version: 0.15.0
+ * Module version: 0.15.1
  * Author: Claude.ai guided by DNA.styx
  *
  * Phase 1: "Investigate" objective.
- *   - MOVETO goal set to the Investigate-Trigger origin (trigger_once, hammer ID 8351).
+ *   - MOVETO goal set to the Investigate-Trigger origin
  *   - On completion (Investigate-Trigger's OnStartTouch), directly hooks the three
  *     PCP-Breakable entities for Phase 2.
  *
  * Phase 2: "DestroyPCP" objective.
- *   - Uses NAVBOT_ZPS_OBJECTIVE_DESTROY_ENTITY + SetObjectiveGenericTargetEntity, one
- *     breakable at a time (hammer IDs 7064, 332454, 332458). Order does not matter;
- *     each breakable's own OnBreak output re-targets the objective to the next
+ *   - Uses DESTROY_ENTITY + SetObjectiveGenericTargetEntity, one
+ *     breakable at a time. Each breakable's own OnBreak output re-targets the objective to the next
  *     surviving one. Once all three are destroyed, hooks PumpDoor1's OnOpen for
  *     Phase 3.
  *
  * Phase 3: "PlantC4" objective.
- *   - PumpDoor1 (looked up by name, classname prop_pumpdoor) is hooked
- *   - Two steps once PumpDoor1 opens: first a plain NAVBOT_ZPS_OBJECTIVE_USE_BUTTON
- *     on C4-Button, then on its OnPressed, a NAVBOT_ZPS_OBJECTIVE_MOVETO to a
- *     hardcoded position near it, bots have no way
- *     to hold position for the .as script's 21s arm duration, so successful
- *     arming may currently require a human.
+ *   - Two steps once PumpDoor1 opens: first a USE_BUTTON
+ *     on C4-Button, then on its OnPressed, a MOVETO to a
+ *     hardcoded position near it.
  *   - No entity is hooked here for Phase 4: there's no output tied to a successful
- *     C4 arm (see Phase 4 notes below), so ZPOTanker_PollAccessCodeButton() listens
+ *     C4 arm, so ZPOTanker_PollAccessCodeButton() listens
  *     for it independently instead.
  *
  * Phase 4: "FindAccessCode" objective.
- *   - AccessCode-Button does not exist until the .as script's FindAC() force-spawns it
- *     from a point_template ("-temp_ACB") roughly 5.55s after a successful C4 arm. There
- *     is no entity output tied to that spawn we can hook directly (the C4 arm success
- *     branch only fires input commands, not outputs), so ZPOTanker_Think() polls for the
- *     button's existence by name each tick instead of trying to detect arm success first.
+ *   - AccessCode-Button does not exist until roughly 5.55s after a successful C4 arm. There
+ *     is no entity output tied to that spawn we can hook directly, so ZPOTanker_Think() polls for the
+ *     button's existence by name each tick.
  *   - AccessCode-Button (hammer ID 5038) also exists in the map from round start as a
  *     real, working func_button, never killed until pressed. The poll must skip this
  *     hammer ID and keep searching, or it latches onto the wrong instance immediately
  *     at round start and never re-checks. Keypad-Button (Phase 5) and Hatch-Button
  *     (Phase 6) have the same original-entity problem, at hammer IDs 205026 and 6922.
- *   - Once found, standard NAVBOT_ZPS_OBJECTIVE_USE_BUTTON + SetObjectiveUseButton is
- *     used, matching zpo_biotec.sp's pattern for its own named buttons.
+ *   - Once found, standard USE_BUTTON + SetObjectiveUseButton is
+ *     used.
  *
  * Phase 5: "EnterCode" objective.
  *   - Same shape as Phase 4: Keypad-Button doesn't exist until SpawnKeypadButton()
@@ -55,19 +49,18 @@
  *     skipping the original entity at hammer ID 6922.
  *
  * Phase 7: "EscapeToBoats" objective.
- *   - Only lifeboat1_button (hammer ID 7783) is used.
+ *   - Only lifeboat1_button (looked up by name) is used.
  *   - Not a plain USE_BUTTON completion: OnPressed fires on every press attempt
  *     regardless of the .as script's lock state or its 45% success roll, so it
  *     can't tell a real launch apart from a failed one. On success, LifeBoat1()
  *     renames the button entity to "Zero" -- confirmed as success-only via two
- *     independent side effects in the same branch (this rename and a PlaySound
- *     call with no matching signal in the failure branch). ZPOTanker_Think()
+ *     independent side effects in the same branch. ZPOTanker_Think()
  *     polls for that rename instead of hooking OnPressed at all.
  *   - Same known limitation as Phase 3: a failed press may end the bot's
  *     USE_BUTTON task without a retry.
  *
  * Phase 8: "ReachIsland" objective.
- *   - Island-Trigger (trigger_multiple, hammer ID 358625) is StartDisabled with no
+ *   - Island-Trigger (trigger_multiple, looked up by name) is StartDisabled with no
  *     filtername at all so it's hooked directly the same "hook early, wait for enable + touch" way.
  *   - No new objective is set on reaching this phase: the bot is carried to the
  *     island by the lifeboat train's own movement, not by directed pathing.
@@ -78,13 +71,18 @@ static bool s_bPCP1Destroyed;
 static bool s_bPCP2Destroyed;
 static bool s_bPCP3Destroyed;
 
-// doesn't exist at map start.
+// AccessCode-Button doesn't exist at map start.
 static bool s_bAccessCodeButtonHooked;
+
+// Keypad-Button doesn't exist at map start.
 static bool s_bKeypadButtonHooked;
+
+// Hatch-Button doesn't exist at map start.
 static bool s_bHatchButtonHooked;
 
-// lifeboat1_button's OnPressed fires on every press attempt only 
-// the "Zero" rename (SetEntityName in LifeBoat1()) confirms
+// lifeboat1_button's OnPressed fires on every press attempt regardless of the
+// .as script's lock state or its success roll, so it can't be used to detect a
+// genuine launch. Only the "Zero" rename (SetEntityName in LifeBoat1()) confirms
 // success -- polled here instead of hooked.
 static bool s_bLifeboat1Launched;
 
@@ -92,7 +90,7 @@ void ZPOTanker_OnIslandReached(const char[] output, int caller, int activator, f
 {
 	NavBotZPSModInterface.ResetObjective();
 
-	// Phase 8 ends here. This is the final objective.
+	// Phase 8 ends here. This is the final objective in the .as script's chain.
 }
 
 void ZPOTanker_PollLifeboat1Launch()
@@ -122,7 +120,9 @@ void ZPOTanker_PollLifeboat1Launch()
 	NavBotZPSModInterface.ResetObjective();
 
 	// No new objective set here: the bot is carried to the island by the
-	// lifeboat train's own movement, not by directed pathing. 
+	// lifeboat train's own movement, not by directed pathing. Same known
+	// limitation as Phases 3/7 -- NavBot's default combat behavior on a nearby
+	// threat could still pull a bot off the moving boat.
 	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "Island-Trigger");
 
 	if (trigger == INVALID_ENT_REFERENCE)
@@ -149,8 +149,8 @@ void ZPOTanker_OnHatchButtonPressed(const char[] output, int caller, int activat
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 
 	// Note: a single press may fail the .as script's success roll (55% chance)
-	// and the bot may not retry once its USE_BUTTON task completes -- 
-	// Phase 7 completion is detected
+	// and the bot may not retry once its USE_BUTTON task completes -- same known
+	// limitation as Phase 3's C4 arming. Phase 7 completion is detected
 	// independently by ZPOTanker_PollLifeboat1Launch() (see ZPOTanker_Think()).
 }
 
@@ -327,7 +327,15 @@ void ZPOTanker_TargetNextPCP()
 
 	if (entity == INVALID_ENT_REFERENCE)
 	{
-		// All three destroyed then PumpDoor1 opens.
+		// All three destroyed. PumpDoor1 opens via the .as script's OpenLower(),
+		// ~1s before C4-ArmTrigger is enabled -- hook that instead of the trigger.
+		// Looked up by name, not hammer ID: PumpDoor1 has no duplicate entity to
+		// disambiguate against, and hammer IDs can drift across map recompiles.
+		// Classname is prop_pumpdoor, not prop_door_rotating: a logic_auto-style
+		// entity fires OnMapSpawn at round start and uses AddOutput to swap
+		// PumpDoor1/PumpDoor2 to this ZPS-custom door subclass (same pattern used
+		// for DoorSeal1-5 -> prop_doorseal and TowerDoor1-2 -> prop_towerdoor),
+		// before our code ever runs.
 		int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "prop_pumpdoor", "PumpDoor1");
 
 		if (door == INVALID_ENT_REFERENCE)
