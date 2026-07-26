@@ -84,7 +84,7 @@
  *     starts a plain SourcePawn CreateTimer(179.0, ...) the moment the radio
  *     is pressed. That number comes from the .as script's own schedule: 23s
  *     to Obj_DefendBarnStart, +157s (flTA) to the truck moving, +~7s driving
- , +4s to Obj_HitTheLightsStart unlocking the
+ *     , +4s to Obj_HitTheLightsStart unlocking the
  *     button = ~191s total. Firing at 179s gives bots a ~12s head start
  *     walking to searchlight_activbutton before it's actually unlockable.
  *   - NAVBOT_ZPS_OBJECTIVE_USE_BUTTON is set immediately at that point even
@@ -141,17 +141,11 @@ void ZPOHarvest_OnBridgeDestroyed(const char[] output, int caller, int activator
 {
 	NavBotZPSModInterface.ResetObjective();
 
-	// Passive -- bots just defend normally until ZPOHarvest_OnSearchlightTimer
-	// (started in ZPOHarvest_OnRadioButtonPressed) sends them to the button.
 }
 
 void ZPOHarvest_OnRadioButtonPressed(const char[] output, int caller, int activator, float delay)
 {
-	// .as timeline from here: 23s -> Obj_DefendBarnStart, +157s (flTA) ->
-	// truck starts moving, +~7s drive (250 u/s over ~1756 units of track) ->
-	// Obj_DefendBarnEnd, +4s -> Obj_HitTheLightsStart unlocks the button.
-	// ~191s total. Firing at 179s gives bots a ~12s head start walking over,
-	// approximate per DNA.styx (doesn't need to be exact).
+
 	CreateTimer(179.0, ZPOHarvest_OnSearchlightTimer, .flags = TIMER_FLAG_NO_MAPCHANGE);
 
 	if (s_bBridgeDestroyed)
@@ -164,8 +158,7 @@ void ZPOHarvest_OnRadioButtonPressed(const char[] output, int caller, int activa
 
 	if (entity == INVALID_ENT_REFERENCE)
 	{
-		// Already broken (s_bBridgeDestroyed missed it, e.g. hook order at
-		// round start) -- treat the same as the flag check above.
+
 		ZPOHarvest_OnBridgeDestroyed(output, caller, activator, delay);
 		return;
 	}
