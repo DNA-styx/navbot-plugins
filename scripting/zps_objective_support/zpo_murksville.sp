@@ -4,98 +4,39 @@
  * NavBot ZPS objective support module for the zpo_murksville map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.7.0
+ * Module version: 0.8.2
  * Author: Claude.ai guided by DNA.styx
  *
- * Phase 0a: "DrainBoat" (cart stage).
- *   - push_pump_trigger (trigger_multiple, hammer ID 473433) is parented to
- *     pushCart, a func_tracktrain that only advances while players stand in the
- *     trigger (genSpeed() scales its speed by player count). There is no button
- *     here, so bots get a MOVETO to the trigger's live m_vecAbsOrigin, polled
- *     every Think() tick, so they keep pace with it as the cart moves. Bot
- *     presence contributes to the player count genSpeed() reads, but
- *     full-speed progress likely still needs humans.
- *   - Completion is confirmed via rotatepump's OnFullyOpen (func_door_rotating,
- *     hammer ID 768975) - a real, always-present entity the .as script's
- *     cartpath4 waypoint opens once the cart reaches the end of its track.
+ * Phase: 0a - DrainBoat (cart stage)
+ * Summary: The cart advances based on how many players are standing in the
+ *   trigger, so bots just need to be present in it.
+ * Entity: push_pump_trigger (trigger_multiple, 473433), parented to pushCart
+ * Bot action: MOVETO the trigger's live m_vecAbsOrigin every Think() tick
+ * Confirmation: rotatepump's OnFullyOpen (func_door_rotating, 768975)
  *
- * Phase 0b: "DrainBoat" (pump stage).
- *   - Same shape as 0a: push_pump_trigger2 is parented to pushPump, another
- *     func_tracktrain. MOVETO its live m_vecAbsOrigin each Think() tick.
- *   - Completion is confirmed via pumppathEnd's OnPass (path_track, hammer ID
- *     473453), which the .as script's pumpFinish() is itself bound to.
+ * Phase: 0b - DrainBoat (pump stage)
+ * Summary: Same shape as 0a, second trigger/cart pair
+ * Entity: push_pump_trigger2 (trigger_multiple), parented to pushPump
+ * Bot action: MOVETO the trigger's live m_vecAbsOrigin every Think() tick
+ * Confirmation: pumppathEnd's OnPass (path_track, 473453)
  *
- * Phase 1: "FindBoatParts".
- *   - On Phase 0b completion, bots get an immediate MOVETO to a confirmed
- *     walkable position near the PartsProp spawn cluster (in-game:
- *     1199.93, 1945.92, -543.38, aka "the gas station"), since
- *     PartsDeliver doesn't exist for ~9.1s regardless. Chat message fired on the
- *     MOVETO via ZPOMurksville_ChatMsgSurvivors().
- *   - PartsProp (prop_physics_multiplayer, hammer ID 824760) is inert until the
- *     .as script's ShowFindPartsObj() fires its OnUser1 (~9.1s after
- *     DrainBoat completes, via internal Schedule::Task calls - no entity
- *     output to hook), which kills it and force-spawns PartsDeliver
- *     (item_deliver) at its position via the -MakerParts template. There's no
- *     output tied to that spawn either, so ZPOMurksville_PollPartsItem()
- *     polls for PartsDeliver by name each Think() tick. No skip-original
- *     complication here: PartsDeliver's static cfg entry is only the
- *     point_template's blueprint, never a live duplicate.
- *   - PartsDeliver required a map-side fix (Stripper:Source) to set its
- *     "itemid" keyvalue to "parts" - it had none in the original map, and
- *     NAVBOT_ZPS_OBJECTIVE_FIND_ITEM matches SetObjectiveItemSearchID()
- *     against that field.
- *   - Once found: NAVBOT_ZPS_OBJECTIVE_FIND_ITEM with item search ID "parts".
- *     Detection radius set to 999999.0 since the 6 possible spawn points
- *     are roughly 2700+ units from where bots are left after DrainBoat -
- *     well beyond the module's default detection radius.
- *   - Pickup confirmed via PartsDeliver's OnItemTaken, hooked persistently
- *     (not once) since it can be dropped and re-picked up by a different
- *     survivor, and this hook needs to fire again when that happens.
- *     OnItemDropped is hooked the same way: on drop, the .as script
- *     disables toolsTrig and clears its carrier tracking regardless of
- *     which sub-phase we're in, so bots are sent back to FIND_ITEM until
- *     it's picked up again. Both hooks stay live for PartsDeliver's whole
- *     lifetime, including through Phase 2 and beyond, since it still
- *     needs carrying to the boat afterward.
+ * Phase: 1 - FindBoatParts
+ * Summary: PartsDeliver spawns from PartsProp ~9.1s in; polled by name
+ *   each tick. Needed a Stripper:Source "itemid" fix. OnItemTaken/
+ *   OnItemDropped hooked persistently through Phase 2+.
+ * Entity: PartsDeliver (item_deliver), spawned via the -MakerParts template
+ * Bot action: MOVETO the gas station (1199.93, 1945.92, -543.38) while
+ *   waiting, then FIND_ITEM "parts" (radius 999999.0) once it exists
+ * Confirmation: PartsDeliver's OnItemTaken
  *
- * Phase 2: "RetoolParts".
- *   - toolsTrig (trigger_multiple, hammer ID 473586) and toolButton
- *     (func_button, hammer ID 473583) both exist from round start, so no
- *     polling is needed to find them. iRetoolProgress (a 45s countdown) is
- *     set once at round start and only ever decremented - never reset -
- *     so an interrupted retool resumes where it left off, it doesn't
- *     restart from 45.
- *   - The actual gameplay gate (bAllowRetooling) is set by toolsTrig's
- *     OnStartTouch matching the carrier's player index - not by
- *     Lock/Unlock on toolButton, so polling toolButton's own locked state
- *     wouldn't work here; it's never actually locked/unlocked at all.
- *   - On PartsDeliver pickup: NAVBOT_ZPS_OBJECTIVE_USE_BUTTON on toolButton
- *     directly (its own pathing walks the carrier into toolsTrig, which
- *     sits right at its edge - no separate MOVETO needed to get there).
- *   - On toolButton's OnPressed (hooked persistently, not once - it can
- *     legitimately fire more than once across interruptions):
- *     NAVBOT_ZPS_OBJECTIVE_MOVETO to toolButton's exact origin (908,
- *     -3160, -589) to hold the carrier in place for the countdown, since
- *     there's no entity output for RetoolTimer()'s tick-by-tick countdown
- *     to hook.
- *   - toolsTrig's OnEndTouch (hooked persistently) re-issues USE_BUTTON on
- *     toolButton whenever the carrier leaves the trigger, whether that's
- *     before the first press or after leaving mid-hold - sending them
- *     back to press it again and resume the countdown from wherever
- *     iRetoolProgress currently sits.
- *   - Completion: RetoolDone() kills toolButton with no output fired, so
- *     ZPOMurksville_UpdateRetoolCompletion() polls each Think() tick for
- *     toolButton's continued existence once pressed; its disappearance
- *     confirms the retool finished.
- *   - Known limitation: since this objective is global
- *     (NavBotZPSModInterface), every bot on the team gets sent to press
- *     toolButton, not just the carrier - and our OnPressed hook fires for
- *     any presser, not just the actual carrier. bAllowRetooling still
- *     silently no-ops a wrong-bot press on the .as side, so this is
- *     harmless in practice, just not selective.
- *   - s_bRetoolDone gates PartsDeliver's persistent OnItemTaken/OnItemDropped
- *     hooks once retool finishes, so a later drop/re-pickup (Phase 3, once
- *     it exists) doesn't get routed back into the toolButton flow.
+ * Phase: 2 - RetoolParts
+ * Summary: Carrier presses toolButton while in toolsTrig, starting a real
+ *   45s countdown in-game. No entity output confirms that countdown
+ *   finishing, so the press itself is treated as this phase's completion.
+ * Entity: toolButton (func_button, 473583) / toolsTrig (trigger_multiple, 473586)
+ * Bot action: USE_BUTTON on toolButton, re-issued if the carrier leaves
+ *   toolsTrig before pressing it
+ * Confirmation: toolButton's OnPressed
  *
  * Further phases (BringParts onward) not yet implemented.
  *
@@ -106,13 +47,14 @@ enum
 	ZPOMURK_PHASE_WAITFORCART = 0,
 	ZPOMURK_PHASE_WAITFORPUMP,
 	ZPOMURK_PHASE_FINDPARTS,
-	ZPOMURK_PHASE_RETOOLING,
 	ZPOMURK_PHASE_DONE
 };
 
 static int s_CurrentPhase = ZPOMURK_PHASE_WAITFORCART;
 static bool s_bPartsItemHooked;
 static bool s_bRetoolDone;
+static bool s_bToolButtonHooked;
+static bool s_bToolsTrigHooked;
 
 void ZPOMurksville_ChatMsgSurvivors(const char[] msg)
 {
@@ -125,30 +67,18 @@ void ZPOMurksville_ChatMsgSurvivors(const char[] msg)
 	}
 }
 
-void ZPOMurksville_UpdateRetoolCompletion()
-{
-	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "toolButton");
-
-	if (button != INVALID_ENT_REFERENCE)
-	{
-		return; // still retooling
-	}
-
-	NavBotZPSModInterface.ResetObjective();
-
-	s_bRetoolDone = true;
-	s_CurrentPhase = ZPOMURK_PHASE_DONE;
-
-	//TODO: Phase 3 - BringParts
-}
-
 void ZPOMurksville_OnToolsTrigEndTouch(const char[] output, int caller, int activator, float delay)
 {
+	if (s_bRetoolDone)
+	{
+		return;
+	}
+
 	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "toolButton");
 
 	if (button == INVALID_ENT_REFERENCE)
 	{
-		return; // already killed - retool finished
+		return;
 	}
 
 	NavBotZPSModInterface.ResetObjective();
@@ -158,19 +88,12 @@ void ZPOMurksville_OnToolsTrigEndTouch(const char[] output, int caller, int acti
 
 void ZPOMurksville_OnToolButtonPressed(const char[] output, int caller, int activator, float delay)
 {
-	// Holds the carrier at the button for the countdown - no entity output
-	// fires per RetoolTimer() tick, so ZPOMurksville_UpdateRetoolCompletion()
-	// polls for toolButton's disappearance instead.
-	float goal[3];
-	goal[0] = 908.0;
-	goal[1] = -3160.0;
-	goal[2] = -589.0;
-
 	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 
-	s_CurrentPhase = ZPOMURK_PHASE_RETOOLING;
+	s_bRetoolDone = true;
+	s_CurrentPhase = ZPOMURK_PHASE_DONE;
+
+	//TODO: Phase 3 - BringParts
 }
 
 void ZPOMurksville_OnPartsDropped(const char[] output, int caller, int activator, float delay)
@@ -232,9 +155,10 @@ void ZPOMurksville_PollPartsItem()
 
 	s_bPartsItemHooked = true;
 
-	// Not "once" - PartsDeliver persists for the rest of the round (it still
-	// needs carrying to the boat in Phase 3), and can be dropped/re-picked
-	// up multiple times, e.g. if the carrier dies mid-retool or mid-carry.
+	// Hooked persistently - PartsDeliver persists for the rest of the round
+	// (it still needs carrying to the boat in Phase 3), and can be dropped
+	// and re-picked up multiple times, e.g. if the carrier dies mid-retool
+	// or mid-carry.
 	HookSingleEntityOutput(item, "OnItemTaken", ZPOMurksville_OnPartsPickedUp, false);
 	HookSingleEntityOutput(item, "OnItemDropped", ZPOMurksville_OnPartsDropped, false);
 
@@ -244,12 +168,42 @@ void ZPOMurksville_PollPartsItem()
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_FIND_ITEM);
 }
 
+void ZPOMurksville_PollGarageEntities()
+{
+	if (s_bToolButtonHooked && s_bToolsTrigHooked)
+	{
+		return;
+	}
+
+	if (!s_bToolButtonHooked)
+	{
+		int toolButton = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "toolButton");
+
+		if (toolButton != INVALID_ENT_REFERENCE)
+		{
+			s_bToolButtonHooked = true;
+			HookSingleEntityOutput(toolButton, "OnPressed", ZPOMurksville_OnToolButtonPressed, false);
+		}
+	}
+
+	if (!s_bToolsTrigHooked)
+	{
+		int toolsTrig = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "toolsTrig");
+
+		if (toolsTrig != INVALID_ENT_REFERENCE)
+		{
+			s_bToolsTrigHooked = true;
+			HookSingleEntityOutput(toolsTrig, "OnEndTouch", ZPOMurksville_OnToolsTrigEndTouch, false);
+		}
+	}
+}
+
 void ZPOMurksville_OnPumpFinished(const char[] output, int caller, int activator, float delay)
 {
-	// PartsDeliver doesn't exist yet (~9.1s of Schedule::Task delays remain in
-	// the .as script), but this staging position is a confirmed walkable spot
-	// near the PartsProp spawn cluster - ZPOMurksville_PollPartsItem()
-	// overrides this with FIND_ITEM the moment PartsDeliver is found.
+	// PartsDeliver spawns ~9.1s later via the .as script's own Schedule::Task
+	// delays. This staging position is a confirmed walkable spot near the
+	// PartsProp spawn cluster - ZPOMurksville_PollPartsItem() overrides this
+	// with FIND_ITEM the moment PartsDeliver is found.
 	float goal[3];
 	goal[0] = 1199.932739;
 	goal[1] = 1945.923706;
@@ -284,6 +238,16 @@ void ZPOMurksville_UpdatePumpTriggerObjective()
 void ZPOMurksville_OnRotatePumpFullyOpen(const char[] output, int caller, int activator, float delay)
 {
 	s_CurrentPhase = ZPOMURK_PHASE_WAITFORPUMP;
+
+	int pathEnd = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "pumppathEnd");
+
+	if (pathEnd == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_murksville: Failed to find the pumppathEnd path_track!");
+		return;
+	}
+
+	HookSingleEntityOutput(pathEnd, "OnPass", ZPOMurksville_OnPumpFinished, true);
 }
 
 void ZPOMurksville_UpdateCartTriggerObjective()
@@ -318,10 +282,7 @@ void ZPOMurksville_Think()
 		case ZPOMURK_PHASE_FINDPARTS:
 		{
 			ZPOMurksville_PollPartsItem();
-		}
-		case ZPOMURK_PHASE_RETOOLING:
-		{
-			ZPOMurksville_UpdateRetoolCompletion();
+			ZPOMurksville_PollGarageEntities();
 		}
 	}
 }
@@ -332,6 +293,8 @@ void ZPOMurksville_Init()
 	s_CurrentPhase = ZPOMURK_PHASE_WAITFORCART;
 	s_bPartsItemHooked = false;
 	s_bRetoolDone = false;
+	s_bToolButtonHooked = false;
+	s_bToolsTrigHooked = false;
 
 	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door_rotating", "rotatepump");
 
@@ -342,38 +305,5 @@ void ZPOMurksville_Init()
 	else
 	{
 		HookSingleEntityOutput(door, "OnFullyOpen", ZPOMurksville_OnRotatePumpFullyOpen, true);
-	}
-
-	int pathEnd = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "pumppathEnd");
-
-	if (pathEnd == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_murksville: Failed to find the pumppathEnd path_track!");
-	}
-	else
-	{
-		HookSingleEntityOutput(pathEnd, "OnPass", ZPOMurksville_OnPumpFinished, true);
-	}
-
-	int toolButton = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "toolButton");
-
-	if (toolButton == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_murksville: Failed to find the toolButton func_button!");
-	}
-	else
-	{
-		HookSingleEntityOutput(toolButton, "OnPressed", ZPOMurksville_OnToolButtonPressed, false);
-	}
-
-	int toolsTrig = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "toolsTrig");
-
-	if (toolsTrig == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_murksville: Failed to find the toolsTrig trigger_multiple!");
-	}
-	else
-	{
-		HookSingleEntityOutput(toolsTrig, "OnEndTouch", ZPOMurksville_OnToolsTrigEndTouch, false);
 	}
 }
