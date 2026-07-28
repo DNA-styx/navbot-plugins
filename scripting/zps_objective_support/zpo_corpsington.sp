@@ -1,34 +1,74 @@
 /**
- * ZPO CORPSINGTON - NAVBOT OBJECTIVE SUPPORT MODULE
+ * zpo_corpsington.sp
+ *
+ * NavBot ZPS objective support module for the zpo_corpsington map.
+ * Intended to be #included by zps_objective_support.sp.
+ *
+ * Module version: 0.10.0
  * Author: Claude.ai guided by DNA.styx
- * Version: 0.10.0
  *
- * Phase 1: BreakIntoOffice
- * Destroy 3x wooden_barricade props to unlock breakdoor1 / breakdoor2. All 3 props share the same targetname, so they
- * are resolved individually via Hammer ID and destroyed one at a time (DESTROY_ENTITY only supports a single target).
- * Completion is confirmed via breakdoor1's OnFullyOpen output.
+ * Phase: 1 - BreakIntoOffice
+ * Summary: Survivors destroy 3 barricades nailed across the office door.
+ *   All 3 share one targetname, so bots are re-targeted to the next
+ *   surviving one by hammer ID each tick until none remain.
+ * Entity: wooden_barricade (prop_physics_multiplayer, 908234 / 908281 / 908312)
+ * Bot action: DESTROY_ENTITY, re-targeted to the next surviving barricade
+ *   each tick
+ * Confirmation: breakdoor1's OnFullyOpen output (func_door_rotating, 34159)
+ *   - the map opens this door once all 3 barricades are gone
  *
- * Phase 2: OpenWarehouse
- * Press wh_button, then wait (objective reset, no goal set) until big_wh_door1 is fully open.
+ * Phase: 2 - OpenWarehouse
+ * Summary: Bots press wh_button to open the warehouse door.
+ * Entity: wh_button (func_button, 54540)
+ * Bot action: USE_BUTTON
+ * Confirmation: wh_button's OnPressed output
  *
- * Phase 3: CutPower
- * Once big_wh_door1 is open, destroy fuse_box_breakable.
+ * Phase: 3 - CutPower
+ * Summary: Once the warehouse door finishes opening, bots destroy the fuse
+ *   box to cut power and start the building's countdown sequence.
+ * Entity: big_wh_door1 (func_door, 26975) / fuse_box_breakable
+ *   (func_breakable, 928335)
+ * Bot action: reset objective and wait until the door opens, then
+ *   DESTROY_ENTITY on the fuse box
+ * Confirmation: big_wh_door1's OnFullyOpen output starts this phase;
+ *   fuse_box_breakable's OnBreak output ends it
  *
- * Phase 4: WaitForPowerToFail
- * The container 'bridge' floor into the upper area isn't there yet, bots are moved to a safe staging position
- * immediately, then a matching 33s timer moves them toward enter_2nd_floor.
+ * Phase: 4 - WaitForPowerToFail
+ * Summary: Starts the map's own ~33 second countdown before the upper
+ *   floor becomes reachable, with no entity output marking progress along
+ *   the way. Bots are moved to a safe staging position and held there
+ *   until a matching timer expires.
+ * Entity: none (fixed staging position)
+ * Bot action: MOVETO staging position (1800.841187 508.958191 288.142029)
+ * Confirmation: 33s CreateTimer, matched to the map's own countdown length
  *
- * Phase 5: GetInsideUpperFloor
- * MOVETO enter_2nd_floor's origin and hook its OnStartTouch directly.
+ * Phase: 5 - GetInsideUpperFloor
+ * Summary: Bots move to and wait at the entry point into the upper floor,
+ *   which only becomes touchable once the Phase 4 countdown finishes.
+ * Entity: enter_2nd_floor (trigger_once, 34622)
+ * Bot action: MOVETO enter_2nd_floor's origin
+ * Confirmation: enter_2nd_floor's OnStartTouch output
  *
- * Phase 6/7: GetToStreet / PushGenerator
- * toolButton (parented to pushcart_model, which moves with pushcart_train along the track) is polled every Think()
- * tick: while m_bLocked is set, bots get a MOVETO to its current m_vecAbsOrigin so they stay near it as the cart
- * moves. Once PCFinish() clears m_bLocked, bots are assigned USE_BUTTON and press it themselves.
+ * Phase: 6/7 - GetToStreet / PushGenerator
+ * Summary: toolButton starts locked and is parented to the moving pushcart.
+ *   Bots track its live position every tick while locked so they stay near
+ *   it as it moves, then use it once the cart finishes its route and
+ *   unlocks it. Actually pushing the cart still needs human players.
+ * Entity: toolButton (func_button, 66092)
+ * Bot action: MOVETO toolButton's live position while locked, then
+ *   USE_BUTTON once unlocked
+ * Confirmation: m_bLocked polled each tick; toolButton's OnPressed output
+ *   ends the phase
  *
- * Phase 8: CloseDoors
- * GenLever() unlocks safehouse_button 6 seconds after toolButton is used, with no entity I/O fired in between.
- * Think() polls m_bLocked until it clears, then assigns USE_BUTTON.
+ * Phase: 8 - CloseDoors
+ * Summary: Pressing toolButton starts a 6 second delay before
+ *   safehouse_button unlocks, with no entity output marking that delay.
+ * Entity: safehouse_button (func_button, 66545)
+ * Bot action: USE_BUTTON once unlocked
+ * Confirmation: m_bLocked polled each tick; safehouse_button's OnPressed
+ *   output ends the phase
+ *
+ *
  */
 
 enum

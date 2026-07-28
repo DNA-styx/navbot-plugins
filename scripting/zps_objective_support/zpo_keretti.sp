@@ -7,45 +7,69 @@
  * Module version: 0.11.1
  * Author: Claude.ai guided by DNA.styx
  *
- * Phase order: MineDoor first for the numerical advantage, then Radio and
- * Files in a random order, then Finale.
+ * Phase: 1 - MineDoor
+ * Summary: Bot unlocks then presses button_mine_door to open mine_door.
+ *   Zombies can revert it mid-open, which re-sends the bot to press the
+ *   button again; the bot also backs off once its own press succeeds,
+ *   instead of re-pressing every 3s while the door swings open. Runs
+ *   first, before Radio/Files.
+ * Entity: mine_door_button (func_button, 161063) / button_mine_door
+ *   (func_button, 346754) / mine_door (func_door, 160901)
+ * Bot action: USE_BUTTON mine_door_button, then USE_BUTTON button_mine_door
+ * Confirmation: mine_door's OnFullyOpen
  *
- * Side task: 3s into the round, one random survivor bot is sent via the
- * general NavBot plugin command API to press the hidden_door unlock button
- * and then +use hidden_door itself to collect the guns/ammo inside.
+ * Phase: 2 - WarehouseDoor
+ * Summary: Bot presses a button on a func_tracktrain door with no
+ *   completion output, then roams for a fixed 10s before the Radio phase
+ *   starts. Only runs when Radio comes up in the phase order, not Files.
+ * Entity: (func_button, 101494, no targetname)
+ * Bot action: USE_BUTTON on the button
+ * Confirmation: none available - the button's OnPressed plus a fixed 10s
+ *   timer stand in for a real completion signal
  *
- * Real players can complete any of MineDoor/WarehouseDoor/Radio/Files
- * independently of the bot script, so every completion/reversion signal
- * is hooked upfront in Init().
+ * Phase: 3 - Radio
+ * Summary: Bot presses obj2_button to enable RadioCapturePoint, then walks
+ *   to the capture zone and waits - a hold-in-zone capture, not an instant
+ *   use. Runs in random order with Files, after MineDoor.
+ * Entity: obj2_button (func_button, 222668) / RadioCapturePoint
+ *   (trigger_capturepoint_zp, 542695)
+ * Bot action: USE_BUTTON obj2_button, then MOVETO capture zone position
+ * Confirmation: RadioCapturePoint's OnHumanCaptureCompleted
  *
- * MineDoor is a two-button chain: mine_door_button unlocks button_mine_door.
- * Zombies can revert an in-progress (not yet fully open) door via
- * door_trigger_zombies. It re-enables door_trigger_survivors and fires
- * mine_door,Close. Both door_trigger_zombies's OnTrigger and
- * mine_door_button's OnPressed are hooked to the same
- * ZPOKeretti_ReassignMineDoorButton, since both cases just need
- * button_mine_door (re)assigned. door_trigger_survivors's OnTrigger (fires
- * once a press actually succeeds) backs the bot off (ResetObjective) while
- * the door is mid-swing, instead of it re-pressing on the button's 3s
- * cooldown until OnFullyOpen.
+ * Phase: 4 - Files
+ * Summary: Bot destroys 4 file cabinets one at a time, in an order
+ *   shuffled once when the phase starts. Runs in random order with Radio,
+ *   after MineDoor.
+ * Entity: 4x func_breakable (269523 / 269836 / 269880 / 269862, no
+ *   targetnames) / destroy_stuff_counter (math_counter, 388249)
+ * Bot action: DESTROY_ENTITY on each cabinet in turn
+ * Confirmation: destroy_stuff_counter's OnHitMax
  *
- * WarehouseDoor is a func_tracktrain with no completion output, so once its
- * button is pressed the bot roams (ResetObjective), then a 10s timer starts
- * the Radio phase.
+ * Phase: 5 - Finale
+ * Summary: button_fire_me starts locked and only unlocks once the flamejet
+ *   wheel is fully turned, so the bot turns the wheel first, then presses
+ *   the button once it's genuinely unlocked. Runs after Radio and Files
+ *   both complete.
+ * Entity: zombiecage_1_trap_1_flamejet_wheel_1 (func_door_rotating, 351913)
+ *   / button_fire_me (func_button, 353567)
+ * Bot action: USE_BUTTON on the wheel, then USE_BUTTON on button_fire_me
+ * Confirmation: the wheel's OnFullyOpen unlocks the button; pressing
+ *   button_fire_me ends the round via the map's own I/O, no further hook
+ *   needed
  *
- * RadioCapturePoint is a hold-in-zone capture, approximated as a single
- * MOVETO.
+ * Side task (not a scored objective, runs alongside the phases above)
+ * Summary: 3s into the round, one random survivor bot is sent via the
+ *   general NavBot plugin command API to open a hidden door near spawn and
+ *   collect the guns/ammo inside.
+ * Entity: (func_button, 372483, no targetname) / hidden_door
+ *   (func_door_rotating, 372306)
+ * Bot action: NAVBOT_PLUGINCMD_USE_ENTITY on the button, then the door
+ * Confirmation: IsRunningPluginCommand() polled in Think() to sequence the
+ *   two steps; nothing further once the door step finishes
  *
- * Files is 4x func_breakable file cabinets, resolved by Hammer ID and
- * destroyed one at a time, polled every Think() tick while active.
- * Completion is confirmed via destroy_stuff_counter's OnHitMax. The target
- * order is shuffled once when the phase starts.
- *
- * Finale: button_fire_me starts locked - it's only unlocked once
- * zombiecage_1_trap_1_flamejet_wheel_1 (a func_door_rotating valve wheel)
- * is fully opened. The bot turns the wheel first, then presses
- * button_fire_me once it's unlocked, which cascades into
- * game_win_human,EndGame on the map's own I/O.
+ * Real players can complete any phase independently of the bot script, so
+ * every completion/reversion signal is hooked upfront in Init(), not
+ * lazily when the script reaches that phase.
  */
 
 // s_CurrentPhase values

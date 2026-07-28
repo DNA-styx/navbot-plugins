@@ -2,69 +2,87 @@
  * zpo_tanker.sp
  *
  * NavBot ZPS objective support module for the zpo_tanker map.
- * Intended to be #included by zps_objective_support.sp, alongside zpo_biotec.sp.
+ * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.15.1
+ * Module version: 0.15.2
  * Author: Claude.ai guided by DNA.styx
  *
- * Phase 1: "Investigate" objective.
- *   - MOVETO goal set to the Investigate-Trigger origin
- *   - On completion (Investigate-Trigger's OnStartTouch), directly hooks the three
- *     PCP-Breakable entities for Phase 2.
+ * Phase: 1 - Investigate
+ * Summary: Bots are sent to the doorway leading into the objective room.
+ *   Touching the trigger there kicks off the objective chain.
+ * Entity: Investigate-Trigger (trigger_once, hammer ID 8351)
+ * Bot action: MOVETO to the trigger's origin.
+ * Confirmation: Investigate-Trigger's OnStartTouch.
  *
- * Phase 2: "DestroyPCP" objective.
- *   - Uses DESTROY_ENTITY + SetObjectiveGenericTargetEntity, one
- *     breakable at a time. Each breakable's own OnBreak output re-targets the objective to the next
- *     surviving one. Once all three are destroyed, hooks PumpDoor1's OnOpen for
- *     Phase 3.
+ * Phase: 2 - DestroyPCP
+ * Summary: Three panels need destroying. Walking to any of them passes
+ *   through the room's only doorway, which is what the .as script itself
+ *   uses to arm their health, so no separate handling is needed for that.
+ * Entity: PCP-Breakable (func_breakable, hammer IDs 7064 / 332454 / 332458)
+ * Bot action: DESTROY_ENTITY, targeting one breakable at a time.
+ * Confirmation: each breakable's OnBreak. The last one destroyed hooks
+ *   PumpDoor1 for Phase 3.
  *
- * Phase 3: "PlantC4" objective.
- *   - Two steps once PumpDoor1 opens: first a USE_BUTTON
- *     on C4-Button, then on its OnPressed, a MOVETO to a
- *     hardcoded position near it.
- *   - No entity is hooked here for Phase 4: there's no output tied to a successful
- *     C4 arm, so ZPOTanker_PollAccessCodeButton() listens
- *     for it independently instead.
+ * Phase: 3 - PlantC4
+ * Summary: PumpDoor1 opening is the .as script's own signal that arming is
+ *   about to become available, ~1s before it enables the touch trigger.
+ *   Bots are sent to press the button, then held near it while arming
+ *   runs -- this doesn't cover the bot walking off mid-arm.
+ * Entity: PumpDoor1 (prop_pumpdoor, hammer ID 181948) / C4-Button
+ *   (func_button, hammer ID 350317)
+ * Bot action: USE_BUTTON on C4-Button, then MOVETO to a fixed point near
+ *   it once pressed.
+ * Confirmation: PumpDoor1's OnOpen starts the phase; C4-Button's OnPressed
+ *   advances to the MOVETO step. No output exists for arming success
+ *   itself, so Phase 4 detection is handled independently.
  *
- * Phase 4: "FindAccessCode" objective.
- *   - AccessCode-Button does not exist until roughly 5.55s after a successful C4 arm. There
- *     is no entity output tied to that spawn we can hook directly, so ZPOTanker_Think() polls for the
- *     button's existence by name each tick.
- *   - AccessCode-Button (hammer ID 5038) also exists in the map from round start as a
- *     real, working func_button, never killed until pressed. The poll must skip this
- *     hammer ID and keep searching, or it latches onto the wrong instance immediately
- *     at round start and never re-checks. Keypad-Button (Phase 5) and Hatch-Button
- *     (Phase 6) have the same original-entity problem, at hammer IDs 205026 and 6922.
- *   - Once found, standard USE_BUTTON + SetObjectiveUseButton is
- *     used.
+ * Phase: 4 - FindAccessCode
+ * Summary: The real button is force-spawned partway through the round. A
+ *   duplicate with the same name already exists in the map from round
+ *   start and must be skipped, or the search latches onto it permanently.
+ * Entity: AccessCode-Button (func_button, hammer ID 5038 for the
+ *   pre-existing duplicate to skip)
+ * Bot action: USE_BUTTON once the real copy is found.
+ * Confirmation: polled by name each tick, skipping hammer ID 5038; then
+ *   OnPressed on the real copy.
  *
- * Phase 5: "EnterCode" objective.
- *   - Same shape as Phase 4: Keypad-Button doesn't exist until SpawnKeypadButton()
- *     force-spawns it (~2.25s after AccessCode-Button is pressed), so it's polled the
- *     same way, skipping the original entity at hammer ID 205026.
+ * Phase: 5 - EnterCode
+ * Summary: Same shape as Phase 4 -- force-spawned after AccessCode-Button
+ *   is pressed, with the same pre-existing duplicate to skip.
+ * Entity: Keypad-Button (func_button, hammer ID 205026 for the duplicate
+ *   to skip)
+ * Bot action: USE_BUTTON once found.
+ * Confirmation: polled by name, skipping hammer ID 205026; then OnPressed.
  *
- * Phase 6: "HitHatchRelease" objective.
- *   - Same shape again: Hatch-Button doesn't exist until SpawnHatchButton()
- *     force-spawns it (~40s after Keypad-Button is pressed), polled the same way,
- *     skipping the original entity at hammer ID 6922.
+ * Phase: 6 - HitHatchRelease
+ * Summary: Same shape again -- force-spawned after Keypad-Button is
+ *   pressed, same duplicate-skip requirement.
+ * Entity: Hatch-Button (func_button, hammer ID 6922 for the duplicate to
+ *   skip)
+ * Bot action: USE_BUTTON once found.
+ * Confirmation: polled by name, skipping hammer ID 6922; then OnPressed.
  *
- * Phase 7: "EscapeToBoats" objective.
- *   - Only lifeboat1_button (looked up by name) is used.
- *   - Not a plain USE_BUTTON completion: OnPressed fires on every press attempt
- *     regardless of the .as script's lock state or its 45% success roll, so it
- *     can't tell a real launch apart from a failed one. On success, LifeBoat1()
- *     renames the button entity to "Zero" -- confirmed as success-only via two
- *     independent side effects in the same branch. ZPOTanker_Think()
- *     polls for that rename instead of hooking OnPressed at all.
- *   - Same known limitation as Phase 3: a failed press may end the bot's
- *     USE_BUTTON task without a retry.
+ * Phase: 7 - EscapeToBoats
+ * Summary: Pressing the button doesn't guarantee the boat launches -- the
+ *   .as script rolls a chance and can reject the attempt, so a press alone
+ *   isn't proof of success. A real launch renames the button entity to
+ *   "Zero".
+ * Entity: lifeboat1_button (func_button, hammer ID 7783)
+ * Bot action: USE_BUTTON on lifeboat1_button.
+ * Confirmation: polled each tick for the button's name changing to "Zero",
+ *   not OnPressed.
  *
- * Phase 8: "ReachIsland" objective.
- *   - Island-Trigger (trigger_multiple, looked up by name) is StartDisabled with no
- *     filtername at all so it's hooked directly the same "hook early, wait for enable + touch" way.
- *   - No new objective is set on reaching this phase: the bot is carried to the
- *     island by the lifeboat train's own movement, not by directed pathing.
- *   - This is the final implemented objective.
+ * Phase: 8 - ReachIsland
+ * Summary: Once the boat launches, the bot is carried to the island
+ *   automatically by the boat's own movement. No bot action is needed to
+ *   get there.
+ * Entity: Island-Trigger (trigger_multiple, hammer ID 358625)
+ * Bot action: none -- the objective is reset with nothing new set.
+ * Confirmation: Island-Trigger's OnStartTouch.
+ *
+ * Further phases (none -- ReachIsland is the last objective in the .as
+ * script's own chain) not yet implemented.
+ *
  */
 
 static bool s_bPCP1Destroyed;
