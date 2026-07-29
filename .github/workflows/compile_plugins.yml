@@ -51,7 +51,7 @@ jobs:
           mkdir -p ${{ env.SCRIPTING_PATH }}/include
 
       - name: Fetch Plugins
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7
         with:
           path: plugins
 
@@ -62,26 +62,27 @@ jobs:
           version: ${{ matrix.sm-version }}
 
       - name: Fetch SMLib
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7
         with:
           repository: bcserv/smlib
           path: smlib
           ref: transitional_syntax
 
       - name: Fetch Left4DHooks
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7
         with:
           repository: SilvDev/Left4DHooks
           path: left4dhooks
 
       - name: Fetch SourceMod REST in Pawn Extension
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7
         with:
-          repository: ErikMinekus/sm-ripext
-          path: ripext   
+          repository: caxanga334/sm-ripext
+          ref: 'fix/mark-natives-as-optional'
+          path: ripext
 
       - name: Fetch NavBot
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7
         with:
           repository: caxanga334/NavBot
           path: navbot

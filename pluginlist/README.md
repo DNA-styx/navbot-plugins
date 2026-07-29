@@ -61,3 +61,8 @@ Optional per map log file and stuck event count threshold, check auto generated 
 ## NavBot Admin Debug Tool
 
 [Go to page.](ADMIN_DEBUG_TOOL.md)
+
+## Auto Skill Update
+
+Automatically updates the skill level of in-game bots when the skill ConVar is changed.    
+
