@@ -13,7 +13,7 @@ public Plugin myinfo =
 	name = "NavBot Admin Debugging Tools",
 	author = "caxanga334",
 	description = "Tool plugin for server admins to debug bots.",
-	version = "1.0.0",
+	version = "1.1.0",
 	url = "https://github.com/caxanga334/navbot-plugins"
 };
 
@@ -46,6 +46,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 public void OnPluginStart()
 {
 	RegAdminCmd("sm_nbadmin_toggle_debug", Command_ToggleDebug, ADMFLAG_CHEATS, "Toggles bot debugging for you.");
+	RegAdminCmd("sm_nbadmin_dump_behavior", Command_DumpBehavior, ADMFLAG_CHEATS, "Prints the active behavior of all bots.");
 }
 
 Action Command_ToggleDebug(int client, int args)
@@ -65,6 +66,34 @@ Action Command_ToggleDebug(int client, int args)
 	else
 	{
 		ReplyToCommand(client, "Disabled bot debugging!");
+	}
+
+	return Plugin_Handled;
+}
+
+Action Command_DumpBehavior(int client, int args)
+{
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsClientInGame(i) && IsPlayerAlive(i) && IsFakeClient(i))
+		{
+			NavBot bot = NavBotManager.GetNavBotByIndex(i);
+
+			if (bot.IsNull)
+			{
+				continue;
+			}
+
+			Address ptr = bot.GetBehaviorInterface();
+
+			// mostly for sanity but getting a NULL interface pointer should be impossible.
+			if (ptr != Address_Null)
+			{
+				char task[200];
+				NavBotBehaviorInterface.GetTaskDebugString(ptr, task, sizeof(task));
+				ReplyToCommand(client, "%N: %s", i, task);
+			}
+		}
 	}
 
 	return Plugin_Handled;
