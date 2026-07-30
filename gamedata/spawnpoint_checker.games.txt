@@ -15,6 +15,13 @@
 			"SpawnPointClassnames"		"info_player_teamspawn"
 		}
 	}
+	"cstrike" /* Counter-Strike: Source */
+	{
+		"Keys"
+		{
+			"SpawnPointClassnames"		"info_player_counterterrorist,info_player_terrorist"
+		}
+	}
 	"dod" /* Day of Defeat: Source */
 	{
 		"Keys"
@@ -27,6 +34,13 @@
 		"Keys"
 		{
 			"SpawnPointClassnames"		"info_player_human,info_player_zombie,info_player_carrier"
+		}
+	}
+	"insurgency" /* Insurgency: Modern Infantry Combat */
+	{
+		"Keys"
+		{
+			"SpawnPointClassnames"		"ins_spawnpoint"
 		}
 	}
 }
