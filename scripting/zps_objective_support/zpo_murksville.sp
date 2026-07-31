@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_murksville map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.9.0
+ * Module version: 0.11.2
  * Author: Claude.ai guided by DNA.styx
  *
  * Phase: 0a - DrainBoat (cart stage)
@@ -62,16 +62,6 @@ void ZPOMurksville_UpdatePumpTriggerObjective()
 void ZPOMurksville_OnRotatePumpFullyOpen(const char[] output, int caller, int activator, float delay)
 {
 	s_CurrentPhase = ZPOMURK_PHASE_WAITFORPUMP;
-
-	int pathEnd = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "pumppathEnd");
-
-	if (pathEnd == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_murksville: Failed to find the pumppathEnd path_track!");
-		return;
-	}
-
-	HookSingleEntityOutput(pathEnd, "OnPass", ZPOMurksville_OnPumpFinished, true);
 }
 
 void ZPOMurksville_UpdateCartTriggerObjective()
@@ -120,5 +110,16 @@ void ZPOMurksville_Init()
 	else
 	{
 		HookSingleEntityOutput(door, "OnFullyOpen", ZPOMurksville_OnRotatePumpFullyOpen, true);
+	}
+
+	int pathEnd = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "pumppathEnd");
+
+	if (pathEnd == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_murksville: Failed to find the pumppathEnd path_track!");
+	}
+	else
+	{
+		HookSingleEntityOutput(pathEnd, "OnPass", ZPOMurksville_OnPumpFinished, true);
 	}
 }
