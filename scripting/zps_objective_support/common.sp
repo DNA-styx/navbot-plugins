@@ -43,6 +43,10 @@ void InitObjectives()
 	{
 		ZPOMurksville_Init();
 	}
+		else if (strcmp(map, "zpo_zomboeing") == 0)
+	{
+		ZPOZomboeing_Init();
+	}
 	else
 	{
 		LogMessage("Current map \"%s\" is not supported!", map);

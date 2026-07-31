@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_tanker map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.15.2
+ * Module version: 0.16.0
  * Author: Claude.ai guided by DNA.styx
  *
  * Phase: 1 - Investigate
@@ -27,9 +27,13 @@
  * Summary: PumpDoor1 opening is the .as script's own signal that arming is
  *   about to become available, ~1s before it enables the touch trigger.
  *   Bots are sent to press the button, then held near it while arming
- *   runs -- this doesn't cover the bot walking off mid-arm.
- * Entity: PumpDoor1 (prop_pumpdoor, hammer ID 181948) / C4-Button
- *   (func_button, hammer ID 350317)
+ *   runs -- this doesn't cover the bot walking off mid-arm. PumpDoor1 is
+ *   found by targetname across all entities, not by classname: a
+ *   logic_auto entity is meant to swap it from prop_door_rotating to a
+ *   ZPS-custom prop_pumpdoor at round start, but per DNA.styx that swap
+ *   isn't reliable, and both classnames have failed to match live.
+ * Entity: PumpDoor1 (classname unreliable -- see above, hammer ID 181948) /
+ *   C4-Button (func_button, hammer ID 350317)
  * Bot action: USE_BUTTON on C4-Button, then MOVETO to a fixed point near
  *   it once pressed.
  * Confirmation: PumpDoor1's OnOpen starts the phase; C4-Button's OnPressed
@@ -347,14 +351,33 @@ void ZPOTanker_TargetNextPCP()
 	{
 		// All three destroyed. PumpDoor1 opens via the .as script's OpenLower(),
 		// ~1s before C4-ArmTrigger is enabled -- hook that instead of the trigger.
-		// Looked up by name, not hammer ID: PumpDoor1 has no duplicate entity to
-		// disambiguate against, and hammer IDs can drift across map recompiles.
-		// Classname is prop_pumpdoor, not prop_door_rotating: a logic_auto-style
-		// entity fires OnMapSpawn at round start and uses AddOutput to swap
-		// PumpDoor1/PumpDoor2 to this ZPS-custom door subclass (same pattern used
-		// for DoorSeal1-5 -> prop_doorseal and TowerDoor1-2 -> prop_towerdoor),
-		// before our code ever runs.
-		int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "prop_pumpdoor", "PumpDoor1");
+		// Classname search unreliable here: a logic_auto entity fires OnMapSpawn
+		// at round start and uses AddOutput to swap PumpDoor1/PumpDoor2's
+		// classname from prop_door_rotating to a ZPS-custom prop_pumpdoor (same
+		// pattern used for DoorSeal1-5 -> prop_doorseal and TowerDoor1-2 ->
+		// prop_towerdoor), but per DNA.styx this AddOutput swap isn't guaranteed
+		// reliable, and both classnames have already failed to match on the live
+		// server. Searching by targetname only, across every entity, sidesteps
+		// classname entirely.
+		int door = INVALID_ENT_REFERENCE;
+		int maxEntities = GetMaxEntities();
+
+		for (int i = 1; i <= maxEntities; i++)
+		{
+			if (!IsValidEntity(i))
+			{
+				continue;
+			}
+
+			char name[32];
+			GetEntPropString(i, Prop_Data, "m_iName", name, sizeof(name));
+
+			if (StrEqual(name, "PumpDoor1"))
+			{
+				door = i;
+				break;
+			}
+		}
 
 		if (door == INVALID_ENT_REFERENCE)
 		{
