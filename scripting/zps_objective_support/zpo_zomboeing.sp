@@ -4,52 +4,61 @@
  * NavBot ZPS objective support module for the zpo_zomboeing map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.3.0
+ * Module version: 0.10.0
  * Author: Claude.ai guided by DNA.styx
  *
  * Phase: 0 - FindSupplies
- * Summary: Three supply crates are scattered near the garage delivery
- *   point. Pickup requires the USE key, not touch, so the crates carry no
- *   itemid keyvalue in the compiled map -- Init() tags each one with its
- *   own unique itemid (its targetname) so FIND_ITEM can match them
- *   without ambiguity between the three. Bots are cycled through each
- *   crate in turn, then DROP_ITEM carries it to the delivery trigger.
- * Entity: cb4 / cb2 / cb_one (item_deliver, hammer IDs 7247950 / 7247987 /
- *   7247997) / cb_four_delzone (trigger_teleport, hammer ID 7157584) /
- *   delzone_counter (math_counter, hammer ID 7157748, max 3)
- * Bot action: FIND_ITEM for each crate's own itemid in turn, then
- *   DROP_ITEM at cb_four_delzone to deliver it.
- * Confirmation: each crate's OnItemTaken output, then cb_four_delzone's
- *   OnStartTouch output, repeated for all 3 crates.
+ * Summary: 3 supply crates, tagged with unique itemids so FIND_ITEM can
+ *   target one at a time. delzone_counter is the source of truth for
+ *   progress, so real players grabbing crates independently is handled
+ *   correctly. First search waits for human_start_trigger_once (bots
+ *   reliably reach it) plus a buffer for the crates to reposition.
+ * Bot action: FIND_ITEM for the next outstanding crate, then DROP_ITEM
+ *   (via SetObjectiveItemUseTarget, per upstream c708eb8) at
+ *   cb_four_delzone.
+ * Confirmation: delzone_counter's OnHitMax ends the phase.
  *
  * Further phases (DeactivateLockdownInTower onward) not yet implemented.
  *
  */
 
 static char s_SupplyCrateNames[3][8] = { "cb4", "cb2", "cb_one" };
-static int s_CrateIndex;
+static int s_CrateEntRefs[3];
+static bool s_CrateTaken[3];
 
-void ZPOZomboeing_OnAllSuppliesDelivered()
+void ZPOZomboeing_OnAllSuppliesDelivered(const char[] output, int caller, int activator, float delay)
 {
 	NavBotZPSModInterface.ResetObjective();
 
 	// TODO: Phase 1 - DeactivateLockdownInTower
 }
 
-void ZPOZomboeing_OnCrateDelivered(const char[] output, int caller, int activator, float delay)
+void ZPOZomboeing_PickNextCrate()
 {
-	s_CrateIndex++;
-
-	if (s_CrateIndex >= sizeof(s_SupplyCrateNames))
+	for (int i = 0; i < sizeof(s_CrateTaken); i++)
 	{
-		ZPOZomboeing_OnAllSuppliesDelivered();
-		return;
+		if (!s_CrateTaken[i])
+		{
+			NavBotZPSModInterface.ResetObjective();
+			NavBotZPSModInterface.SetObjectiveItemSearchID(s_SupplyCrateNames[i]);
+			NavBotZPSModInterface.SetObjectiveDetectionRadius(g_DetectionRadius);
+			NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_FIND_ITEM);
+			return;
+		}
 	}
 
-	ZPOZomboeing_MoveToNextCrate();
+	// Every crate has already been taken (and possibly delivered) -- nothing left to search for.
+	NavBotZPSModInterface.ResetObjective();
 }
 
-void ZPOZomboeing_MoveToDropzone()
+void ZPOZomboeing_OnCrateDelivered(const char[] output, int caller, int activator, float delay)
+{
+	// delzone_counter's own OnHitMax (hooked separately) handles the finished case.
+	// This just moves bots on to whichever crate is still outstanding.
+	ZPOZomboeing_PickNextCrate();
+}
+
+void ZPOZomboeing_MoveToDropzone(int crateIndex)
 {
 	int dropzone = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_teleport", "cb_four_delzone");
 
@@ -60,37 +69,70 @@ void ZPOZomboeing_MoveToDropzone()
 	}
 
 	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveItemSearchID(s_SupplyCrateNames[s_CrateIndex]);
-	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(dropzone);
+	NavBotZPSModInterface.SetObjectiveItemSearchID(s_SupplyCrateNames[crateIndex]);
+	NavBotZPSModInterface.SetObjectiveItemUseTarget(dropzone);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_DROP_ITEM);
+}
 
-	HookSingleEntityOutput(dropzone, "OnStartTouch", ZPOZomboeing_OnCrateDelivered, true);
+int ZPOZomboeing_FindCrateIndex(int entity)
+{
+	for (int i = 0; i < sizeof(s_CrateEntRefs); i++)
+	{
+		if (EntRefToEntIndex(s_CrateEntRefs[i]) == entity)
+		{
+			return i;
+		}
+	}
+
+	return -1;
 }
 
 void ZPOZomboeing_OnCratePickedUp(const char[] output, int caller, int activator, float delay)
 {
-	ZPOZomboeing_MoveToDropzone();
-}
+	int index = ZPOZomboeing_FindCrateIndex(caller);
 
-void ZPOZomboeing_MoveToNextCrate()
-{
-	int crate = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "item_deliver", s_SupplyCrateNames[s_CrateIndex]);
-
-	if (crate == INVALID_ENT_REFERENCE)
+	if (index == -1)
 	{
-		LogError("zpo_zomboeing: Failed to find supply crate! Name: %s", s_SupplyCrateNames[s_CrateIndex]);
 		return;
 	}
 
-	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveItemSearchID(s_SupplyCrateNames[s_CrateIndex]);
-	NavBotZPSModInterface.SetObjectiveDetectionRadius(g_DetectionRadius);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_FIND_ITEM);
+	s_CrateTaken[index] = true;
 
-	HookSingleEntityOutput(crate, "OnItemTaken", ZPOZomboeing_OnCratePickedUp, true);
+	// Bots were already searching for whichever crate was outstanding -- if this is
+	// the one they were pointed at, move on to the delivery step. If a different
+	// crate was taken independently (e.g. by a real player), no action needed here.
+	ZPOZomboeing_MoveToDropzone(index);
 }
 
-void ZPOZomboeing_TagSupplyCrates()
+void ZPOZomboeing_OnCrateDropped(const char[] output, int caller, int activator, float delay)
+{
+	int index = ZPOZomboeing_FindCrateIndex(caller);
+
+	if (index == -1)
+	{
+		return;
+	}
+
+	s_CrateTaken[index] = false;
+
+	// Re-issues FIND_ITEM, whether this crate was the active target or picking back
+	// up after having been exhausted (all others already taken).
+	ZPOZomboeing_PickNextCrate();
+}
+
+void ZPOZomboeing_OnStartDelayExpired(Handle timer)
+{
+	ZPOZomboeing_PickNextCrate();
+}
+
+void ZPOZomboeing_OnHumanStartTriggerTouched(const char[] output, int caller, int activator, float delay)
+{
+	// H_Start()'s randomParcel chain needs to finish repositioning the
+	// crates before FIND_ITEM starts searching for them.
+	CreateTimer(4.0, ZPOZomboeing_OnStartDelayExpired, .flags = TIMER_FLAG_NO_MAPCHANGE);
+}
+
+void ZPOZomboeing_TagAndHookSupplyCrates()
 {
 	for (int i = 0; i < sizeof(s_SupplyCrateNames); i++)
 	{
@@ -103,6 +145,12 @@ void ZPOZomboeing_TagSupplyCrates()
 		}
 
 		SetEntPropString(crate, Prop_Data, "m_strItemID", s_SupplyCrateNames[i]);
+
+		s_CrateEntRefs[i] = EntIndexToEntRef(crate);
+		s_CrateTaken[i] = false;
+
+		HookSingleEntityOutput(crate, "OnItemTaken", ZPOZomboeing_OnCratePickedUp, false);
+		HookSingleEntityOutput(crate, "OnItemDropped", ZPOZomboeing_OnCrateDropped, false);
 	}
 }
 
@@ -115,8 +163,35 @@ void ZPOZomboeing_Init()
 {
 	g_ThinkFunc = ZPOZomboeing_Think;
 
-	s_CrateIndex = 0;
+	ZPOZomboeing_TagAndHookSupplyCrates();
 
-	ZPOZomboeing_TagSupplyCrates();
-	ZPOZomboeing_MoveToNextCrate();
+	int dropzone = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_teleport", "cb_four_delzone");
+
+	if (dropzone == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_zomboeing: Failed to find cb_four_delzone!");
+		return;
+	}
+
+	HookSingleEntityOutput(dropzone, "OnStartTouch", ZPOZomboeing_OnCrateDelivered, false);
+
+	int counter = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "math_counter", "delzone_counter");
+
+	if (counter == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_zomboeing: Failed to find delzone_counter!");
+		return;
+	}
+
+	HookSingleEntityOutput(counter, "OnHitMax", ZPOZomboeing_OnAllSuppliesDelivered, true);
+
+	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_once", "human_start_trigger_once");
+
+	if (trigger == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_zomboeing: Failed to find human_start_trigger_once!");
+		return;
+	}
+
+	HookSingleEntityOutput(trigger, "OnStartTouch", ZPOZomboeing_OnHumanStartTriggerTouched, true);
 }
