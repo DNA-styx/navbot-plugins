@@ -4,9 +4,19 @@
  * NavBot ZPS objective support module for the zpo_zomboeing map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.10.0
+ * Module version: 0.13.0
  * Author: Claude.ai guided by DNA.styx
  *
+ * WARNING!!
+ * 
+ * This is broken do not use! 
+ * 
+ * There is a trigger that players activate as they join
+ * I don't think bots do, so the third package never spawns (or gets 
+ * sent straight to the collection point). Will revisit.
+ * 
+ * 
+ * 
  * Phase: 0 - FindSupplies
  * Summary: 3 supply crates, tagged with unique itemids so FIND_ITEM can
  *   target one at a time. delzone_counter is the source of truth for
@@ -71,6 +81,8 @@ void ZPOZomboeing_MoveToDropzone(int crateIndex)
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveItemSearchID(s_SupplyCrateNames[crateIndex]);
 	NavBotZPSModInterface.SetObjectiveItemUseTarget(dropzone);
+	// 128.0 is the hard minimum enforced by the native itself.
+	NavBotZPSModInterface.SetObjectiveDetectionRadius(128.0);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_DROP_ITEM);
 }
 
@@ -122,6 +134,10 @@ void ZPOZomboeing_OnCrateDropped(const char[] output, int caller, int activator,
 
 void ZPOZomboeing_OnStartDelayExpired(Handle timer)
 {
+	// Re-hook now, after the map's own repositioning has run, rather than at Init()
+	// -- otherwise a stale entity reference from before the reposition can leave a
+	// bot holding a crate we're no longer listening to.
+	ZPOZomboeing_TagAndHookSupplyCrates();
 	ZPOZomboeing_PickNextCrate();
 }
 
@@ -162,8 +178,6 @@ void ZPOZomboeing_Think()
 void ZPOZomboeing_Init()
 {
 	g_ThinkFunc = ZPOZomboeing_Think;
-
-	ZPOZomboeing_TagAndHookSupplyCrates();
 
 	int dropzone = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_teleport", "cb_four_delzone");
 
