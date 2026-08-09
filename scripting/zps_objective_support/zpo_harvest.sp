@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_harvest map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.11.2
+ * Module version: 0.13.6
  * Author: Claude.ai guided by DNA.styx
  *
  * Phase: 0 - DefendHouse
@@ -21,31 +21,32 @@
  * Confirmation: basementgen_lights' OnPressed output
  *
  * Phase: 2 - FindFuse
- * Summary: If a human survivor is present, bots guard (ResetObjective) and
- *   let the human find/plant the fuse; otherwise bots search a basement-wide
- *   spawn and plant it themselves. Re-checked every tick until planted. All
- *   bots move clear of the blast once planted, regardless of mode.
- * Entity: Blast_Objective_Fuse (item_deliver, dynamically spawned, no static
- *   hammer ID) / blastobj_setfuse (trigger_useable, 415635) / C4Relay
- *   (logic_relay, 2371283)
- * Bot action: guard or FIND_ITEM "fuse" (radius 800.0) depending on human
- *   presence, then USE_ITEM on blastobj_setfuse, then MOVETO clear of blast
- * Confirmation: the item's OnItemTaken output (polled for by name each tick;
- *   see inline comments for the persistent-hook and guard-mode reasoning),
- *   then blastobj_setfuse's OnUsed output, then C4Relay's OnTrigger output
+ * Summary: Bots can't reliably USE_ITEM the fuse (confirmed in testing: they
+ *   walk right up to blastobj_setfuse and just stand there). Until that's
+ *   fixed upstream, bots just roam/defend here -- a human has to find the
+ *   fuse and plant it. blastobj_setfuse's OnUsed is hooked in
+ *   ZPOHarvest_OnBasementLightsPressed (bots press that button
+ *   unconditionally, so it's a reliable early gate), so the chain still
+ *   advances once a human plants it, and bots move clear of the blast.
+ * Entity: blastobj_setfuse (trigger_useable, 415635) / C4Relay (logic_relay,
+ *   2371283)
+ * Bot action: none (passive) until planted, then MOVETO clear of the blast
+ * Confirmation: blastobj_setfuse's OnUsed output, then C4Relay's OnTrigger
+ *   output
  *
  * Phase: 3 - Barn Key / Padlock
- * Summary: Same human-guard behavior as Phase 2, re-checked every tick until
- *   the padlock is used. Bots without a human to defer to move through the
- *   tunnel, find the Barn Key, and use it to unlock the generator room door.
- * Entity: genobj_powerout (trigger_once, 433008) / genobj_lockkeys
- *   (item_deliver, dynamically spawned, no static hammer ID) / trig_keys
- *   (trigger_useable, 1247884)
- * Bot action: MOVETO tunnel end, then guard or FIND_ITEM "keys" depending on
- *   human presence, then USE_ITEM on trig_keys
- * Confirmation: genobj_powerout's OnTrigger output, then the item's
- *   OnItemTaken output (polled for by name each tick), then trig_keys'
- *   OnUsed output
+ * Summary: Bots never get far enough to test USE_ITEM on trig_keys (see
+ *   Phase 2 -- they never get past planting the fuse). Disabled as a
+ *   precaution rather than confirmed broken; bots just roam/defend until a
+ *   human finds the Barn Key and uses it on trig_keys. trig_keys is only
+ *   reachable after the blast opens the tunnel, so it's hooked progressively
+ *   in ZPOHarvest_OnBombDetonated rather than early in Init() (unlike
+ *   blastobj_setfuse, which a human can reach directly).
+ * Entity: genobj_powerout (trigger_once, 433008) / trig_keys (trigger_
+ *   useable, 1247884)
+ * Bot action: MOVETO tunnel end (unconditional positioning), then none
+ *   (passive) until the padlock is used
+ * Confirmation: trig_keys' OnUsed output
  *
  * Phase: 4 - FireUpGenerator
  * Summary: With the generator room door unlocked, bots press the generator
@@ -85,41 +86,7 @@
  *
  */
 
-static bool s_bFuseItemHooked;
-static bool s_bKeysItemHooked;
 static bool s_bBridgeDestroyed;
-static bool s_bFuseSocketHooked;
-static bool s_bKeysSocketHooked;
-static bool s_bFusePhaseActive;
-static bool s_bFuseHumanGuard;
-static bool s_bKeysPhaseActive;
-static bool s_bKeysHumanGuard;
-
-void ZPOHarvest_ChatMsgSurvivors(const char[] msg)
-{
-	for (int client = 1; client <= MaxClients; client++)
-	{
-		if (IsClientInGame(client) && GetClientTeam(client) == 2)
-		{
-			PrintToChat(client, "\x04[NAV]\x01 %s", msg);
-		}
-	}
-}
-
-int ZPOHarvest_CountHumanSurvivors()
-{
-	int count = 0;
-
-	for (int client = 1; client <= MaxClients; client++)
-	{
-		if (IsClientInGame(client) && !IsFakeClient(client) && GetClientTeam(client) == 2)
-		{
-			count++;
-		}
-	}
-
-	return count;
-}
 
 void ZPOHarvest_OnSearchlightPressed(const char[] output, int caller, int activator, float delay)
 {
@@ -214,8 +181,6 @@ void ZPOHarvest_OnGeneratorButtonPressed(const char[] output, int caller, int ac
 
 void ZPOHarvest_OnKeysUsed(const char[] output, int caller, int activator, float delay)
 {
-	s_bKeysPhaseActive = false;
-
 	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "genobj_spot");
 
 	if (button == INVALID_ENT_REFERENCE)
@@ -231,93 +196,13 @@ void ZPOHarvest_OnKeysUsed(const char[] output, int caller, int activator, float
 	HookSingleEntityOutput(button, "OnPressed", ZPOHarvest_OnGeneratorButtonPressed, true);
 }
 
-void ZPOHarvest_OnKeysItemTaken(const char[] output, int caller, int activator, float delay)
-{
-	if (s_bKeysHumanGuard)
-	{
-		// A human is expected to be carrying it -- bots stay on guard duty,
-		// don't reassign them to USE_ITEM.
-		return;
-	}
-
-	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveItemSearchID("keys");
-
-	int socket = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_useable", "trig_keys");
-
-	if (socket == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_harvest: Failed to find trig_keys!");
-		return;
-	}
-
-	NavBotZPSModInterface.SetObjectiveItemUseTarget(socket);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_ITEM);
-
-	if (!s_bKeysSocketHooked)
-	{
-		s_bKeysSocketHooked = true;
-		HookSingleEntityOutput(socket, "OnUsed", ZPOHarvest_OnKeysUsed, true);
-	}
-}
-
-void ZPOHarvest_PollKeysItem()
-{
-	if (s_bKeysItemHooked)
-	{
-		return;
-	}
-
-	int item = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "item_deliver", "genobj_lockkeys");
-
-	if (item == INVALID_ENT_REFERENCE)
-	{
-		return;
-	}
-
-	s_bKeysItemHooked = true;
-	// Same reasoning as the fuse: persistent hook so a re-pickup after the
-	// carrying bot dies still gets a USE_ITEM objective assigned.
-	HookSingleEntityOutput(item, "OnItemTaken", ZPOHarvest_OnKeysItemTaken, false);
-}
-
-void ZPOHarvest_ApplyKeysAssignment(bool guard)
-{
-	NavBotZPSModInterface.ResetObjective();
-
-	if (guard)
-	{
-		ZPOHarvest_ChatMsgSurvivors("We'll guard here - go find the keys!");
-		return;
-	}
-
-	NavBotZPSModInterface.SetObjectiveItemSearchID("keys");
-	NavBotZPSModInterface.SetObjectiveDetectionRadius(g_DetectionRadius);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_FIND_ITEM);
-}
-
-void ZPOHarvest_UpdateKeysGuardStatus()
-{
-	if (!s_bKeysPhaseActive)
-	{
-		return;
-	}
-
-	bool humansPresent = (ZPOHarvest_CountHumanSurvivors() > 0);
-
-	if (humansPresent != s_bKeysHumanGuard)
-	{
-		s_bKeysHumanGuard = humansPresent;
-		ZPOHarvest_ApplyKeysAssignment(s_bKeysHumanGuard);
-	}
-}
-
 void ZPOHarvest_OnGeneratorAreaReached(const char[] output, int caller, int activator, float delay)
 {
-	s_bKeysItemHooked = false;
-	s_bKeysPhaseActive = true;
-	s_bKeysHumanGuard = (ZPOHarvest_CountHumanSurvivors() > 0);
-	ZPOHarvest_ApplyKeysAssignment(s_bKeysHumanGuard);
+	NavBotZPSModInterface.ResetObjective();
+
+	// Disabled as a precaution rather than confirmed broken;
+	// bots just roam/defend here until that's revisited. A human has to find
+	// the Barn Key and use it on trig_keys themselves in the meantime.
 }
 
 void ZPOHarvest_OnBombDetonated(const char[] output, int caller, int activator, float delay)
@@ -341,12 +226,20 @@ void ZPOHarvest_OnBombDetonated(const char[] output, int caller, int activator, 
 	}
 
 	HookSingleEntityOutput(trigger, "OnTrigger", ZPOHarvest_OnGeneratorAreaReached, true);
+
+	int keysSocket = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_useable", "trig_keys");
+
+	if (keysSocket == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_harvest: Failed to find trig_keys!");
+		return;
+	}
+
+	HookSingleEntityOutput(keysSocket, "OnUsed", ZPOHarvest_OnKeysUsed, true);
 }
 
 void ZPOHarvest_OnFusePlanted(const char[] output, int caller, int activator, float delay)
 {
-	s_bFusePhaseActive = false;
-
 	NavBotZPSModInterface.ResetObjective();
 
 	float goal[3];
@@ -368,17 +261,12 @@ void ZPOHarvest_OnFusePlanted(const char[] output, int caller, int activator, fl
 	HookSingleEntityOutput(relay, "OnTrigger", ZPOHarvest_OnBombDetonated, true);
 }
 
-void ZPOHarvest_OnFuseItemTaken(const char[] output, int caller, int activator, float delay)
+void ZPOHarvest_OnBasementLightsPressed(const char[] output, int caller, int activator, float delay)
 {
-	if (s_bFuseHumanGuard)
-	{
-		// A human is expected to be carrying it -- bots stay on guard duty,
-		// don't reassign them to USE_ITEM.
-		return;
-	}
 
+	// Bots can't reliably USE_ITEM the fuse on blastobj_setfuse (confirmed in
+	// testing: they walk right up to it and just stand there). Until that's fixed bots just roam/defend here.
 	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveItemSearchID("fuse");
 
 	int socket = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_useable", "blastobj_setfuse");
 
@@ -388,77 +276,7 @@ void ZPOHarvest_OnFuseItemTaken(const char[] output, int caller, int activator, 
 		return;
 	}
 
-	NavBotZPSModInterface.SetObjectiveItemUseTarget(socket);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_ITEM);
-
-	if (!s_bFuseSocketHooked)
-	{
-		s_bFuseSocketHooked = true;
-		HookSingleEntityOutput(socket, "OnUsed", ZPOHarvest_OnFusePlanted, true);
-	}
-}
-
-void ZPOHarvest_PollFuseItem()
-{
-	if (s_bFuseItemHooked)
-	{
-		return;
-	}
-
-	int item = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "item_deliver", "Blast_Objective_Fuse");
-
-	if (item == INVALID_ENT_REFERENCE)
-	{
-		return;
-	}
-
-	s_bFuseItemHooked = true;
-	// Persistent hook (not once-only): if the carrying bot dies before
-	// reaching blastobj_setfuse, ZPS drops the fuse for another bot to pick
-	// up -- a once-only hook would miss that re-pickup and leave the new
-	// carrier without a USE_ITEM objective.
-	HookSingleEntityOutput(item, "OnItemTaken", ZPOHarvest_OnFuseItemTaken, false);
-}
-
-void ZPOHarvest_ApplyFuseAssignment(bool guard)
-{
-	NavBotZPSModInterface.ResetObjective();
-
-	if (guard)
-	{
-		ZPOHarvest_ChatMsgSurvivors("We'll guard here - go find the fuse!");
-		return;
-	}
-
-	NavBotZPSModInterface.SetObjectiveItemSearchID("fuse");
-	// g_vecFuseLocations' farthest point is ~689 units from here -- wider than
-	// the default g_DetectionRadius (512).
-	NavBotZPSModInterface.SetObjectiveDetectionRadius(800.0);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_FIND_ITEM);
-}
-
-void ZPOHarvest_UpdateFuseGuardStatus()
-{
-	if (!s_bFusePhaseActive)
-	{
-		return;
-	}
-
-	bool humansPresent = (ZPOHarvest_CountHumanSurvivors() > 0);
-
-	if (humansPresent != s_bFuseHumanGuard)
-	{
-		s_bFuseHumanGuard = humansPresent;
-		ZPOHarvest_ApplyFuseAssignment(s_bFuseHumanGuard);
-	}
-}
-
-void ZPOHarvest_OnBasementLightsPressed(const char[] output, int caller, int activator, float delay)
-{
-	s_bFuseItemHooked = false;
-	s_bFusePhaseActive = true;
-	s_bFuseHumanGuard = (ZPOHarvest_CountHumanSurvivors() > 0);
-	ZPOHarvest_ApplyFuseAssignment(s_bFuseHumanGuard);
+	HookSingleEntityOutput(socket, "OnUsed", ZPOHarvest_OnFusePlanted, true);
 }
 
 void ZPOHarvest_OnBasementDoorOpen(const char[] output, int caller, int activator, float delay)
@@ -480,32 +298,13 @@ void ZPOHarvest_OnBasementDoorOpen(const char[] output, int caller, int activato
 
 void ZPOHarvest_Think()
 {
-	if (!s_bFuseItemHooked)
-	{
-		ZPOHarvest_PollFuseItem();
-	}
 
-	if (!s_bKeysItemHooked)
-	{
-		ZPOHarvest_PollKeysItem();
-	}
-
-	ZPOHarvest_UpdateFuseGuardStatus();
-	ZPOHarvest_UpdateKeysGuardStatus();
 }
 
 void ZPOHarvest_Init()
 {
 	g_ThinkFunc = ZPOHarvest_Think;
-	s_bFuseItemHooked = false;
-	s_bKeysItemHooked = false;
 	s_bBridgeDestroyed = false;
-	s_bFuseSocketHooked = false;
-	s_bKeysSocketHooked = false;
-	s_bFusePhaseActive = false;
-	s_bFuseHumanGuard = false;
-	s_bKeysPhaseActive = false;
-	s_bKeysHumanGuard = false;
 
 	int bridge = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_breakable", "BreakBrushT1");
 
