@@ -2,73 +2,9 @@
  * zpo_corpsington.sp
  *
  * NavBot ZPS objective support module for the zpo_corpsington map.
- * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.10.0
+ * Module version: 0.12.6
  * Author: Claude.ai guided by DNA.styx
- *
- * Phase: 1 - BreakIntoOffice
- * Summary: Survivors destroy 3 barricades nailed across the office door.
- *   All 3 share one targetname, so bots are re-targeted to the next
- *   surviving one by hammer ID each tick until none remain.
- * Entity: wooden_barricade (prop_physics_multiplayer, 908234 / 908281 / 908312)
- * Bot action: DESTROY_ENTITY, re-targeted to the next surviving barricade
- *   each tick
- * Confirmation: breakdoor1's OnFullyOpen output (func_door_rotating, 34159)
- *   - the map opens this door once all 3 barricades are gone
- *
- * Phase: 2 - OpenWarehouse
- * Summary: Bots press wh_button to open the warehouse door.
- * Entity: wh_button (func_button, 54540)
- * Bot action: USE_BUTTON
- * Confirmation: wh_button's OnPressed output
- *
- * Phase: 3 - CutPower
- * Summary: Once the warehouse door finishes opening, bots destroy the fuse
- *   box to cut power and start the building's countdown sequence.
- * Entity: big_wh_door1 (func_door, 26975) / fuse_box_breakable
- *   (func_breakable, 928335)
- * Bot action: reset objective and wait until the door opens, then
- *   DESTROY_ENTITY on the fuse box
- * Confirmation: big_wh_door1's OnFullyOpen output starts this phase;
- *   fuse_box_breakable's OnBreak output ends it
- *
- * Phase: 4 - WaitForPowerToFail
- * Summary: Starts the map's own ~33 second countdown before the upper
- *   floor becomes reachable, with no entity output marking progress along
- *   the way. Bots are moved to a safe staging position and held there
- *   until a matching timer expires.
- * Entity: none (fixed staging position)
- * Bot action: MOVETO staging position (1800.841187 508.958191 288.142029)
- * Confirmation: 33s CreateTimer, matched to the map's own countdown length
- *
- * Phase: 5 - GetInsideUpperFloor
- * Summary: Bots move to and wait at the entry point into the upper floor,
- *   which only becomes touchable once the Phase 4 countdown finishes.
- * Entity: enter_2nd_floor (trigger_once, 34622)
- * Bot action: MOVETO enter_2nd_floor's origin
- * Confirmation: enter_2nd_floor's OnStartTouch output
- *
- * Phase: 6/7 - GetToStreet / PushGenerator
- * Summary: toolButton starts locked and is parented to the moving pushcart.
- *   Bots track its live position every tick while locked so they stay near
- *   it as it moves, then use it once the cart finishes its route and
- *   unlocks it. Actually pushing the cart still needs human players.
- * Entity: toolButton (func_button, 66092)
- * Bot action: MOVETO toolButton's live position while locked, then
- *   USE_BUTTON once unlocked
- * Confirmation: m_bLocked polled each tick; toolButton's OnPressed output
- *   ends the phase
- *
- * Phase: 8 - CloseDoors
- * Summary: Pressing toolButton starts a 6 second delay before
- *   safehouse_button unlocks, with no entity output marking that delay.
- * Entity: safehouse_button (func_button, 66545)
- * Bot action: USE_BUTTON once unlocked
- * Confirmation: m_bLocked polled each tick; safehouse_button's OnPressed
- *   output ends the phase
- *
- *
  */
 
 enum
@@ -81,43 +17,261 @@ enum
 
 static int s_CurrentPhase = ZPOCORP_PHASE_BREAKINTOOFFICE;
 
-void ZPOCorpsington_OnSafehouseButtonPressed(const char[] output, int caller, int activator, float delay)
+void ZPOCorpsington_Init()
 {
-	NavBotZPSModInterface.ResetObjective();
-	//TODO: Phase 9
+	g_ThinkFunc = ZPOCorpsington_Think;
+	s_CurrentPhase = ZPOCORP_PHASE_BREAKINTOOFFICE;
+
+	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door_rotating", "breakdoor1");
+
+	if (door == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_corpsington: Failed to find the breakdoor1 func_door_rotating!");
+	}
+	else
+	{
+		HookSingleEntityOutput(door, "OnFullyOpen", ZPOCorpsington_OnBreakdoorsOpened, true);
+	}
+
+	ZPOCorpsington_UpdateBarricadeObjective();
 }
 
-void ZPOCorpsington_UpdateCloseDoorsObjective()
+void ZPOCorpsington_Think()
 {
-	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "safehouse_button");
+	switch (s_CurrentPhase)
+	{
+		case ZPOCORP_PHASE_BREAKINTOOFFICE:
+		{
+			ZPOCorpsington_UpdateBarricadeObjective();
+		}
+		case ZPOCORP_PHASE_WAITFORCART:
+		{
+			ZPOCorpsington_UpdateToolButtonObjective();
+		}
+		case ZPOCORP_PHASE_CLOSEDOORS:
+		{
+			ZPOCorpsington_UpdateCloseDoorsObjective();
+		}
+	}
+}
 
-	if (button == INVALID_ENT_REFERENCE)
+// Sends a parameterless plugin command (e.g. NAVBOT_PLUGINCMD_PATROL,
+// NAVBOT_PLUGINCMD_STOPCMD) to all survivors.
+void ZPOCorpsington_CommandSurvivors(NavBotPluginCommandTypes command)
+{
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (!IsClientInGame(client) || !NavBotManager.IsNavBot(client) || GetClientTeam(client) != 2)
+		{
+			continue;
+		}
+
+		NavBot bot = view_as<NavBot>(client);
+		bot.SendPluginCommand(command);
+	}
+}
+
+/**
+ * Phase: 1 - BreakIntoOffice
+ * Summary: Survivors destroy 3 barricades nailed across the office door.
+ *   All 3 share one targetname, so bots are re-targeted to the next
+ *   surviving one by hammer ID each tick until none remain.
+ * Entity: wooden_barricade (prop_physics_multiplayer, 908234 / 908281 / 908312)
+ * Bot action: DESTROY_ENTITY, re-targeted to the next surviving barricade
+ *   each tick
+ * Confirmation: breakdoor1's OnFullyOpen output (func_door_rotating, 34159)
+ *   - the map opens this door once all 3 barricades are gone
+ */
+void ZPOCorpsington_UpdateBarricadeObjective()
+{
+	static int s_CurrentBarricadeRef = INVALID_ENT_REFERENCE;
+
+	// Current target still alive, nothing to do.
+	if (s_CurrentBarricadeRef != INVALID_ENT_REFERENCE && EntRefToEntIndex(s_CurrentBarricadeRef) != INVALID_ENT_REFERENCE)
 	{
 		return;
 	}
 
-	int locked = GetEntProp(button, Prop_Data, "m_bLocked", 1);
+	static const int barricadeHammerIDs[] = { 908234, 908281, 908312 };
 
-	if (locked != 0)
+	for (int i = 0; i < sizeof(barricadeHammerIDs); i++)
 	{
-		return; // still waiting on GenLever() to unlock it
+		int entity = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "prop_physics_multiplayer", barricadeHammerIDs[i]);
+
+		if (entity != INVALID_ENT_REFERENCE)
+		{
+			s_CurrentBarricadeRef = EntIndexToEntRef(entity);
+			NavBotZPSModInterface.SetObjectiveGenericTargetEntity(entity);
+			NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_DESTROY_ENTITY);
+			return;
+		}
+	}
+
+	// No barricades left to target - Phase 1 completion is confirmed by
+	// ZPOCorpsington_OnBreakdoorsOpened, hooked in Init().
+}
+
+// Confirms Phase 1 - see ZPOCorpsington_UpdateBarricadeObjective above.
+
+/**
+ * Phase: 2.1 - OpenWarehouse
+ * Summary: Bots press wh_button to open the warehouse door.
+ * Entity: wh_button (func_button, 54540)
+ * Bot action: USE_BUTTON
+ * Confirmation: wh_button's OnPressed output
+ */
+void ZPOCorpsington_OnBreakdoorsOpened(const char[] output, int caller, int activator, float delay)
+{
+	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "wh_button");
+
+	if (button == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_corpsington: Failed to find the wh_button func_button!");
+		s_CurrentPhase = ZPOCORP_PHASE_DONE;
+		return;
 	}
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveUseButton(button);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
-	HookSingleEntityOutput(button, "OnPressed", ZPOCorpsington_OnSafehouseButtonPressed, true);
+	HookSingleEntityOutput(button, "OnPressed", ZPOCorpsington_OnWarehouseButtonPressed, true);
 
 	s_CurrentPhase = ZPOCORP_PHASE_DONE;
 }
 
-void ZPOCorpsington_OnToolButtonPressed(const char[] output, int caller, int activator, float delay)
+/**
+ * Phase: 2.2 - OpenWarehouse (waiting)
+ * Summary: Once pressed, bots patrol nearby while waiting for the door to
+ *   finish opening.
+ * Entity: none (patrols near wh_button, no specific target)
+ * Bot action: NAVBOT_PLUGINCMD_PATROL (survivors only)
+ * Confirmation: none - ends when NAVBOT_PLUGINCMD_STOPCMD is sent in
+ *   ZPOCorpsington_OnWarehouseDoorOpened
+ */
+void ZPOCorpsington_OnWarehouseButtonPressed(const char[] output, int caller, int activator, float delay)
 {
 	NavBotZPSModInterface.ResetObjective();
+	ZPOCorpsington_CommandSurvivors(NAVBOT_PLUGINCMD_PATROL);
 
-	s_CurrentPhase = ZPOCORP_PHASE_CLOSEDOORS;
+	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door", "big_wh_door1");
+
+	if (door != INVALID_ENT_REFERENCE)
+	{
+		HookSingleEntityOutput(door, "OnFullyOpen", ZPOCorpsington_OnWarehouseDoorOpened, true);
+	}
 }
 
+/**
+ * Phase: 3 - CutPower
+ * Summary: Once the warehouse door finishes opening, bots destroy the fuse
+ *   box to cut power and start the building's countdown sequence. The
+ *   patrol command started in Phase 2 is stopped first.
+ * Entity: big_wh_door1 (func_door, 26975) / fuse_box_breakable
+ *   (func_breakable, 928335)
+ * Bot action: reset objective and wait until the door opens (patrolling
+ *   meanwhile), then DESTROY_ENTITY on the fuse box
+ * Confirmation: big_wh_door1's OnFullyOpen output starts this phase;
+ *   fuse_box_breakable's OnBreak output ends it
+ */
+void ZPOCorpsington_OnWarehouseDoorOpened(const char[] output, int caller, int activator, float delay)
+{
+	ZPOCorpsington_CommandSurvivors(NAVBOT_PLUGINCMD_STOPCMD);
+
+	int entity = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_breakable", "fuse_box_breakable");
+
+	if (entity == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_corpsington: Failed to find the fuse_box_breakable func_breakable!");
+		return;
+	}
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(entity);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_DESTROY_ENTITY);
+	HookSingleEntityOutput(entity, "OnBreak", ZPOCorpsington_OnFuseBoxBroken, true);
+}
+
+// Confirms Phase 3 - see ZPOCorpsington_OnWarehouseDoorOpened above.
+
+/**
+ * Phase: 4 - WaitForPowerToFail
+ * Summary: The map's own ~33 second countdown before the upper floor
+ *   becomes reachable, with no entity output marking progress.
+ * Entity: none (fixed staging position)
+ * Bot action: MOVETO staging position (1800.841187 508.958191 288.142029)
+ * Confirmation: 33s CreateTimer, matched to the map's own countdown length
+ */
+void ZPOCorpsington_OnFuseBoxBroken(const char[] output, int caller, int activator, float delay)
+{
+	float goal[3];
+	goal[0] = 1800.841187;
+	goal[1] = 508.958191;
+	goal[2] = 288.142029;
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+
+	CreateTimer(33.0, ZPOCorpsington_Timer_EnterSecondFloor, .flags = TIMER_FLAG_NO_MAPCHANGE);
+}
+
+// Confirms Phase 4 (timer elapsed) - see ZPOCorpsington_OnFuseBoxBroken above.
+void ZPOCorpsington_Timer_EnterSecondFloor(Handle timer)
+{
+	ZPOCorpsington_ActivateEnterSecondFloor();
+}
+
+/**
+ * Phase: 5 - GetInsideUpperFloor
+ * Summary: Bots move to and wait at the entry point into the upper floor,
+ *   which only becomes touchable once the Phase 4 countdown finishes.
+ * Entity: enter_2nd_floor (trigger_once, 34622)
+ * Bot action: MOVETO enter_2nd_floor's origin
+ * Confirmation: enter_2nd_floor's OnStartTouch output
+ */
+void ZPOCorpsington_ActivateEnterSecondFloor()
+{
+	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_once", "enter_2nd_floor");
+
+	float goal[3];
+	goal[0] = 1904.0;
+	goal[1] = 1120.0;
+	goal[2] = 288.0;
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+
+	if (trigger == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_corpsington: Failed to find the enter_2nd_floor trigger_once!");
+		return;
+	}
+
+	HookSingleEntityOutput(trigger, "OnStartTouch", ZPOCorpsington_OnEnteredSecondFloor, true);
+}
+
+// Confirms Phase 5 - see ZPOCorpsington_ActivateEnterSecondFloor above.
+void ZPOCorpsington_OnEnteredSecondFloor(const char[] output, int caller, int activator, float delay)
+{
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_NONE);
+	NavBotZPSModInterface.ResetObjective();
+
+	s_CurrentPhase = ZPOCORP_PHASE_WAITFORCART;
+}
+
+/**
+ * Phase: 6/7 - GetToStreet / PushGenerator
+ * Summary: toolButton starts locked and is parented to the moving pushcart.
+ *   Bots track its live position every tick while locked so they stay near
+ *   it as it moves, then use it once the cart finishes its route and
+ *   unlocks it.
+ * Entity: toolButton (func_button, 66092)
+ * Bot action: MOVETO toolButton's live position while locked, then
+ *   USE_BUTTON once unlocked
+ * Confirmation: m_bLocked polled each tick; toolButton's OnPressed output
+ *   ends the phase
+ */
 void ZPOCorpsington_UpdateToolButtonObjective()
 {
 	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "toolButton");
@@ -150,165 +304,61 @@ void ZPOCorpsington_UpdateToolButtonObjective()
 	s_CurrentPhase = ZPOCORP_PHASE_DONE;
 }
 
-void ZPOCorpsington_OnEnteredSecondFloor(const char[] output, int caller, int activator, float delay)
+// Confirms Phase 6/7 - see ZPOCorpsington_UpdateToolButtonObjective above.
+void ZPOCorpsington_OnToolButtonPressed(const char[] output, int caller, int activator, float delay)
 {
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_NONE);
 	NavBotZPSModInterface.ResetObjective();
 
-	s_CurrentPhase = ZPOCORP_PHASE_WAITFORCART;
+	s_CurrentPhase = ZPOCORP_PHASE_CLOSEDOORS;
 }
 
-void ZPOCorpsington_ActivateEnterSecondFloor()
+/**
+ * Phase: 8 - CloseDoors
+ * Summary: Pressing toolButton starts a 6 second delay before
+ *   safehouse_button unlocks, with no entity output marking that delay.
+ * Entity: safehouse_button (func_button, 66545)
+ * Bot action: USE_BUTTON once unlocked
+ * Confirmation: m_bLocked polled each tick; safehouse_button's OnPressed
+ *   output ends the phase
+ */
+void ZPOCorpsington_UpdateCloseDoorsObjective()
 {
-	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_once", "enter_2nd_floor");
-
-	float goal[3];
-	goal[0] = 1904.0;
-	goal[1] = 1120.0;
-	goal[2] = 288.0;
-
-	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-
-	if (trigger == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_corpsington: Failed to find the enter_2nd_floor trigger_once!");
-		return;
-	}
-
-	HookSingleEntityOutput(trigger, "OnStartTouch", ZPOCorpsington_OnEnteredSecondFloor, true);
-}
-
-void ZPOCorpsington_Timer_EnterSecondFloor(Handle timer)
-{
-	ZPOCorpsington_ActivateEnterSecondFloor();
-}
-
-void ZPOCorpsington_OnFuseBoxBroken(const char[] output, int caller, int activator, float delay)
-{
-	float goal[3];
-	goal[0] = 1800.841187;
-	goal[1] = 508.958191;
-	goal[2] = 288.142029;
-
-	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-
-	CreateTimer(33.0, ZPOCorpsington_Timer_EnterSecondFloor, .flags = TIMER_FLAG_NO_MAPCHANGE);
-}
-
-void ZPOCorpsington_OnWarehouseDoorOpened(const char[] output, int caller, int activator, float delay)
-{
-	int entity = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_breakable", "fuse_box_breakable");
-
-	if (entity == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_corpsington: Failed to find the fuse_box_breakable func_breakable!");
-		return;
-	}
-
-	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(entity);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_DESTROY_ENTITY);
-	HookSingleEntityOutput(entity, "OnBreak", ZPOCorpsington_OnFuseBoxBroken, true);
-}
-
-void ZPOCorpsington_OnWarehouseButtonPressed(const char[] output, int caller, int activator, float delay)
-{
-	NavBotZPSModInterface.ResetObjective();
-
-	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door", "big_wh_door1");
-
-	if (door != INVALID_ENT_REFERENCE)
-	{
-		HookSingleEntityOutput(door, "OnFullyOpen", ZPOCorpsington_OnWarehouseDoorOpened, true);
-	}
-}
-
-void ZPOCorpsington_OnBreakdoorsOpened(const char[] output, int caller, int activator, float delay)
-{
-	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "wh_button");
+	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "safehouse_button");
 
 	if (button == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_corpsington: Failed to find the wh_button func_button!");
-		s_CurrentPhase = ZPOCORP_PHASE_DONE;
 		return;
+	}
+
+	int locked = GetEntProp(button, Prop_Data, "m_bLocked", 1);
+
+	if (locked != 0)
+	{
+		return; // still waiting on GenLever() to unlock it
 	}
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveUseButton(button);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
-	HookSingleEntityOutput(button, "OnPressed", ZPOCorpsington_OnWarehouseButtonPressed, true);
+	HookSingleEntityOutput(button, "OnPressed", ZPOCorpsington_OnSafehouseButtonPressed, true);
 
 	s_CurrentPhase = ZPOCORP_PHASE_DONE;
 }
 
-void ZPOCorpsington_UpdateBarricadeObjective()
+/**
+ * Phase: 9 - KillZombies
+ * Summary: Bots just patrol the safehouse to
+ *    find and fight anything trapped inside with them.
+ * Entity: none (safehouse interior, no specific target)
+ * Bot action: PATROL (survivors only)
+ * Confirmation: none - resolved by the round's own win/loss state, not by
+ *   this module
+ */
+void ZPOCorpsington_OnSafehouseButtonPressed(const char[] output, int caller, int activator, float delay)
 {
-	static int s_CurrentBarricadeRef = INVALID_ENT_REFERENCE;
-
-	// Current target still alive, nothing to do.
-	if (s_CurrentBarricadeRef != INVALID_ENT_REFERENCE && EntRefToEntIndex(s_CurrentBarricadeRef) != INVALID_ENT_REFERENCE)
-	{
-		return;
-	}
-
-	static const int barricadeHammerIDs[] = { 908234, 908281, 908312 };
-
-	for (int i = 0; i < sizeof(barricadeHammerIDs); i++)
-	{
-		int entity = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "prop_physics_multiplayer", barricadeHammerIDs[i]);
-
-		if (entity != INVALID_ENT_REFERENCE)
-		{
-			s_CurrentBarricadeRef = EntIndexToEntRef(entity);
-			NavBotZPSModInterface.SetObjectiveGenericTargetEntity(entity);
-			NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_DESTROY_ENTITY);
-			return;
-		}
-	}
-
-	// No barricades left to target - Phase 1 completion is confirmed by
-	// ZPOCorpsington_OnBreakdoorsOpened, hooked in Init().
+	// Final phase - no SetCurrentObjective call, and no matching STOPCMD;
+	// the patrol just runs until the round ends via CheckSH()'s own logic.
 	NavBotZPSModInterface.ResetObjective();
-}
-
-void ZPOCorpsington_Think()
-{
-	switch (s_CurrentPhase)
-	{
-		case ZPOCORP_PHASE_BREAKINTOOFFICE:
-		{
-			ZPOCorpsington_UpdateBarricadeObjective();
-		}
-		case ZPOCORP_PHASE_WAITFORCART:
-		{
-			ZPOCorpsington_UpdateToolButtonObjective();
-		}
-		case ZPOCORP_PHASE_CLOSEDOORS:
-		{
-			ZPOCorpsington_UpdateCloseDoorsObjective();
-		}
-	}
-}
-
-void ZPOCorpsington_Init()
-{
-	g_ThinkFunc = ZPOCorpsington_Think;
-	s_CurrentPhase = ZPOCORP_PHASE_BREAKINTOOFFICE;
-
-	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door_rotating", "breakdoor1");
-
-	if (door == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_corpsington: Failed to find the breakdoor1 func_door_rotating!");
-	}
-	else
-	{
-		HookSingleEntityOutput(door, "OnFullyOpen", ZPOCorpsington_OnBreakdoorsOpened, true);
-	}
-
-	ZPOCorpsington_UpdateBarricadeObjective();
+	ZPOCorpsington_CommandSurvivors(NAVBOT_PLUGINCMD_PATROL);
 }
