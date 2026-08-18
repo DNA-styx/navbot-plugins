@@ -47,6 +47,10 @@ void InitObjectives()
 	{
 		ZPOZomboeing_Init();
 	}
+		else if (strcmp(map, "zpo_terminal_vf1") == 0)
+	{
+		ZPOTerminal_Init();
+	}
 	else
 	{
 		LogMessage("Current map \"%s\" is not supported!", map);
