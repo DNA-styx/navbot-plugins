@@ -50,6 +50,10 @@ void InitObjectives()
 		else if (strcmp(map, "zpo_terminal_vf1") == 0)
 	{
 		ZPOTerminal_Init();
+	}		
+		else if (strcmp(map, "zpo_redqueen_r106") == 0)
+	{
+		ZPORedQueenR106_Init();
 	}
 	else
 	{
