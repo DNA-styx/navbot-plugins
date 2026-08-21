@@ -55,6 +55,10 @@ void InitObjectives()
 	{
 		ZPORedQueenR106_Init();
 	}
+		else if (strcmp(map, "zpo_gasdump_nf1") == 0)
+	{
+		ZPOGasdumpNF1_Init();
+	}
 	else
 	{
 		LogMessage("Current map \"%s\" is not supported!", map);
