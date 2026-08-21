@@ -4,23 +4,15 @@
  * NavBot ZPS objective support module for the zpo_zomboeing map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.13.0
+ * Module version: 0.14.0
  * Author: Claude.ai guided by DNA.styx
  *
- * Status: unusable
+ * Status: Unusable
  *
- * Issues: There is a trigger that players activate as they join. I don't
- *   think bots do, so the third package never spawns (or gets sent
- *   straight to the collection point). Will revisit.
+ * Issues: only two crates spawn when bots play. Player counting trigger?
+ *  
  */
 
-enum
-{
-	ZPOZOMBOEING_PHASE_FINDSUPPLIES = 0,
-	ZPOZOMBOEING_PHASE_DONE
-};
-
-static int s_CurrentPhase = ZPOZOMBOEING_PHASE_FINDSUPPLIES;
 static char s_SupplyCrateNames[3][8] = { "cb4", "cb2", "cb_one" };
 static int s_CrateEntRefs[3];
 static bool s_CrateTaken[3];
@@ -28,7 +20,6 @@ static bool s_CrateTaken[3];
 void ZPOZomboeing_Init()
 {
 	g_ThinkFunc = ZPOZomboeing_Think;
-	s_CurrentPhase = ZPOZOMBOEING_PHASE_FINDSUPPLIES;
 
 	int dropzone = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_teleport", "cb_four_delzone");
 
@@ -68,28 +59,20 @@ void ZPOZomboeing_Think()
 
 /**
  * Phase: 0 - FindSupplies
- * Summary: 3 crates, unique itemids so FIND_ITEM targets one at a time.
- *   delzone_counter is the source of truth for progress. First search
- *   waits for human_start_trigger_once plus a reposition buffer -- see
- *   Issues above.
- * Entity: cb4 / cb2 / cb_one (item_deliver, hammer IDs 7247950 / 7247987 /
- *   7247997) / cb_four_delzone (trigger_teleport, hammer ID 7157584) /
- *   delzone_counter (math_counter, hammer ID 7157748, max 3) /
- *   human_start_trigger_once (trigger_once, hammer ID 5665647)
- * Bot action: FIND_ITEM for the next outstanding crate, then DROP_ITEM
- *   (via SetObjectiveItemUseTarget, per upstream c708eb8) at
- *   cb_four_delzone.
- * Confirmation: delzone_counter's OnHitMax ends the phase.
+ * Summary: Bots search for and deliver 3 supply crates one at a time.
+ * Entity: item_deliver / trigger_teleport / math_counter / trigger_once
+ * Bot action: FIND_ITEM, then DROP_ITEM
+ * Confirmation: all crates delivered
  */
 void ZPOZomboeing_OnHumanStartTriggerTouched(const char[] output, int caller, int activator, float delay)
 {
-	// randomParcel chain needs time to reposition the crates first.
+	// Buffer for the randomParcel reposition.
 	CreateTimer(4.0, ZPOZomboeing_OnStartDelayExpired, .flags = TIMER_FLAG_NO_MAPCHANGE);
 }
 
 void ZPOZomboeing_OnStartDelayExpired(Handle timer)
 {
-	// Re-hook after repositioning, not at Init(), to avoid stale entity refs.
+	// Re-hook after repositioning.
 	ZPOZomboeing_TagAndHookSupplyCrates();
 	ZPOZomboeing_PickNextCrate();
 }
@@ -118,11 +101,6 @@ void ZPOZomboeing_TagAndHookSupplyCrates()
 
 void ZPOZomboeing_PickNextCrate()
 {
-	if (s_CurrentPhase != ZPOZOMBOEING_PHASE_FINDSUPPLIES)
-	{
-		return;
-	}
-
 	for (int i = 0; i < sizeof(s_CrateTaken); i++)
 	{
 		if (!s_CrateTaken[i])
@@ -196,7 +174,6 @@ void ZPOZomboeing_MoveToDropzone(int crateIndex)
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveItemSearchID(s_SupplyCrateNames[crateIndex]);
 	NavBotZPSModInterface.SetObjectiveItemUseTarget(dropzone);
-	// 128.0 is the native's hard minimum.
 	NavBotZPSModInterface.SetObjectiveDetectionRadius(128.0);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_DROP_ITEM);
 }
@@ -210,8 +187,6 @@ void ZPOZomboeing_OnCrateDelivered(const char[] output, int caller, int activato
 void ZPOZomboeing_OnAllSuppliesDelivered(const char[] output, int caller, int activator, float delay)
 {
 	NavBotZPSModInterface.ResetObjective();
-
-	s_CurrentPhase = ZPOZOMBOEING_PHASE_DONE;
 
 	// TODO: Phase 1 - DeactivateLockdownInTower
 }
