@@ -10,7 +10,7 @@
  * Status: Working: Find battery room. WIP: Find batteries
  *
  * Issues: Bots don't collect guns before going to first objective
- *          tend to return back to get stocked.
+ *          tend to return back to restock.
  */
 
 enum

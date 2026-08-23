@@ -7,9 +7,9 @@
  * Module version: 0.11.4
  * Author: Claude.ai guided by DNA.styx
  *
- * Status: Under review after file format change
+ * Status: Usable
  *
- * Issues: None logged.
+ * Issues: Bots get stuck in a loop at the radio button. Don't camp the mine door
  */
 
 // s_CurrentPhase values
@@ -52,8 +52,7 @@ void ZPOKeretti_Init()
 	s_SideTaskStep = SIDETASK_NONE;
 	s_SideTaskBotRef = INVALID_ENT_REFERENCE;
 
-	// Every completion/reversion signal is hooked here, before any
-	// objective is assigned.
+	// Every completion/reversion signal is hooked here
 
 	// Phase 0 (MineDoor) completion.
 	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door", "mine_door");
@@ -215,12 +214,12 @@ void ZPOKeretti_AdvanceParallelPhase()
 
 /**
  * Phase: 0 - MineDoor
- * Summary: Bot presses a button to unlock a second button, which opens the
- *   door. Zombies can revert the door mid-open; the bot re-presses the
+ * Summary: Press a button to unlock a second button, which opens the
+ *   door. Zombies can revert the door mid-open; re-press the
  *   second button when that happens.
  * Entity: func_button / func_button / func_door
- * Bot action: USE_BUTTON, then USE_BUTTON
- * Confirmation: door's OnFullyOpen output
+ * Bot action: USE_BUTTON
+ * Confirmation: OnFullyOpen
  */
 void ZPOKeretti_ReassignMineDoorButton(const char[] output, int caller, int activator, float delay)
 {
@@ -268,11 +267,10 @@ void ZPOKeretti_OnMineDoorOpened(const char[] output, int caller, int activator,
 
 /**
  * Phase: 1 - WarehouseDoor
- * Summary: Bot presses a button that starts a func_tracktrain door
- *   moving, then roams for a fixed duration before the Radio phase starts.
+ * Summary: Press a button to start the door opening 
  * Entity: func_button
  * Bot action: USE_BUTTON
- * Confirmation: fixed timer after the button press
+ * Confirmation: fixed timer 
  */
 void ZPOKeretti_StartWarehouseDoorPhase()
 {
@@ -324,8 +322,7 @@ void ZPOKeretti_Timer_ActivateRadio(Handle timer)
 
 /**
  * Phase: 2 - Radio
- * Summary: Bot presses a button to enable a capture zone, then walks into
- *   the zone and waits for it to fill.
+ * Summary: Presses a button on the radio then stay the cap zone.
  * Entity: func_button / trigger_capturepoint_zp
  * Bot action: USE_BUTTON, then MOVETO
  * Confirmation: capture point's completion output
@@ -386,8 +383,7 @@ void ZPOKeretti_OnRadioCaptureCompleted(const char[] output, int caller, int act
 
 /**
  * Phase: 3 - Files
- * Summary: Bot destroys breakable cabinets one at a time, in a shuffled
- *   order picked when the phase starts.
+ * Summary: Destroy each file cabinets 
  * Entity: func_breakable (x4) / math_counter
  * Bot action: DESTROY_ENTITY, repeated
  * Confirmation: counter's OnHitMax output
@@ -459,12 +455,10 @@ void ZPOKeretti_OnFilesDestroyed(const char[] output, int caller, int activator,
 
 /**
  * Phase: 4 - Finale
- * Summary: Bot turns a locked valve wheel, which unlocks a button; the bot
- *   then presses the button.
+ * Summary: Turn a valve wheel presses a button.
  * Entity: func_door_rotating / func_button
  * Bot action: USE_BUTTON, then USE_BUTTON
- * Confirmation: wheel's OnFullyOpen output; the button press ends the
- *   round via the map's own I/O
+ * Confirmation: Finish, round ends
  */
 void ZPOKeretti_StartFinale()
 {
@@ -498,12 +492,10 @@ void ZPOKeretti_OnFinaleWheelOpened(const char[] output, int caller, int activat
 }
 
 /**
- * Side task (not a scored objective, runs alongside the phases above)
- * Summary: One random survivor bot is sent to open a door near spawn and
- *   collect the items inside, via the general plugin command API rather
- *   than the objective system used above.
+ * Side task 
+ * Summary: Unlock and open hidden door
  * Entity: func_button / func_door_rotating
- * Bot action: NAVBOT_PLUGINCMD_USE_ENTITY, then again
+ * Bot action: NAVBOT_PLUGINCMD_USE_ENTITY
  * Confirmation: polled command-running state
  */
 void ZPOKeretti_Timer_AnnounceMineDoor(Handle timer)

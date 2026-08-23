@@ -5,6 +5,10 @@
  *
  * Module version: 0.12.6
  * Author: Claude.ai guided by DNA.styx
+ * 
+ * Status: Usable
+ *
+ * Issues: None
  */
 
 enum
@@ -74,13 +78,10 @@ void ZPOCorpsington_CommandSurvivors(NavBotPluginCommandTypes command)
 /**
  * Phase: 1 - BreakIntoOffice
  * Summary: Survivors destroy 3 barricades nailed across the office door.
- *   All 3 share one targetname, so bots are re-targeted to the next
- *   surviving one by hammer ID each tick until none remain.
  * Entity: wooden_barricade (prop_physics_multiplayer, 908234 / 908281 / 908312)
  * Bot action: DESTROY_ENTITY, re-targeted to the next surviving barricade
  *   each tick
  * Confirmation: breakdoor1's OnFullyOpen output (func_door_rotating, 34159)
- *   - the map opens this door once all 3 barricades are gone
  */
 void ZPOCorpsington_UpdateBarricadeObjective()
 {
@@ -115,7 +116,7 @@ void ZPOCorpsington_UpdateBarricadeObjective()
 
 /**
  * Phase: 2.1 - OpenWarehouse
- * Summary: Bots press wh_button to open the warehouse door.
+ * Summary: Press wh_button to open the warehouse door.
  * Entity: wh_button (func_button, 54540)
  * Bot action: USE_BUTTON
  * Confirmation: wh_button's OnPressed output
@@ -141,12 +142,10 @@ void ZPOCorpsington_OnBreakdoorsOpened(const char[] output, int caller, int acti
 
 /**
  * Phase: 2.2 - OpenWarehouse (waiting)
- * Summary: Once pressed, bots patrol nearby while waiting for the door to
- *   finish opening.
+ * Summary: Wait for the door to open.
  * Entity: none (patrols near wh_button, no specific target)
- * Bot action: NAVBOT_PLUGINCMD_PATROL (survivors only)
- * Confirmation: none - ends when NAVBOT_PLUGINCMD_STOPCMD is sent in
- *   ZPOCorpsington_OnWarehouseDoorOpened
+ * Bot action: NAVBOT_PLUGINCMD_PATROL
+ * Confirmation: OnWarehouseDoorOpened
  */
 void ZPOCorpsington_OnWarehouseButtonPressed(const char[] output, int caller, int activator, float delay)
 {
@@ -163,15 +162,11 @@ void ZPOCorpsington_OnWarehouseButtonPressed(const char[] output, int caller, in
 
 /**
  * Phase: 3 - CutPower
- * Summary: Once the warehouse door finishes opening, bots destroy the fuse
- *   box to cut power and start the building's countdown sequence. The
- *   patrol command started in Phase 2 is stopped first.
+ * Summary: Destroy the fuse box
  * Entity: big_wh_door1 (func_door, 26975) / fuse_box_breakable
  *   (func_breakable, 928335)
- * Bot action: reset objective and wait until the door opens (patrolling
- *   meanwhile), then DESTROY_ENTITY on the fuse box
- * Confirmation: big_wh_door1's OnFullyOpen output starts this phase;
- *   fuse_box_breakable's OnBreak output ends it
+ * Bot action: DESTROY_ENTITY 
+ * Confirmation: fuse_box_breakable's OnBreak
  */
 void ZPOCorpsington_OnWarehouseDoorOpened(const char[] output, int caller, int activator, float delay)
 {
@@ -195,11 +190,10 @@ void ZPOCorpsington_OnWarehouseDoorOpened(const char[] output, int caller, int a
 
 /**
  * Phase: 4 - WaitForPowerToFail
- * Summary: The map's own ~33 second countdown before the upper floor
- *   becomes reachable, with no entity output marking progress.
+ * Summary: Wait for container to make path.
  * Entity: none (fixed staging position)
- * Bot action: MOVETO staging position (1800.841187 508.958191 288.142029)
- * Confirmation: 33s CreateTimer, matched to the map's own countdown length
+ * Bot action: MOVETO 
+ * Confirmation: 33s CreateTimer
  */
 void ZPOCorpsington_OnFuseBoxBroken(const char[] output, int caller, int activator, float delay)
 {
@@ -223,10 +217,9 @@ void ZPOCorpsington_Timer_EnterSecondFloor(Handle timer)
 
 /**
  * Phase: 5 - GetInsideUpperFloor
- * Summary: Bots move to and wait at the entry point into the upper floor,
- *   which only becomes touchable once the Phase 4 countdown finishes.
+ * Summary: Access building through window.
  * Entity: enter_2nd_floor (trigger_once, 34622)
- * Bot action: MOVETO enter_2nd_floor's origin
+ * Bot action: MOVETO 
  * Confirmation: enter_2nd_floor's OnStartTouch output
  */
 void ZPOCorpsington_ActivateEnterSecondFloor()
@@ -262,16 +255,12 @@ void ZPOCorpsington_OnEnteredSecondFloor(const char[] output, int caller, int ac
 
 /**
  * Phase: 6/7 - GetToStreet / PushGenerator
- * Summary: toolButton starts locked and is parented to the moving pushcart.
- *   Bots track its live position every tick while locked so they stay near
- *   it as it moves, then use it once the cart finishes its route and
- *   unlocks it.
+ * Summary: Push generator, then turn it on.
  * Entity: toolButton (func_button, 66092)
  * Bot action: MOVETO toolButton's live position while locked, then
  *   USE_BUTTON once unlocked
  * Confirmation: m_bLocked polled each tick; toolButton's OnPressed output
- *   ends the phase
- */
+  */
 void ZPOCorpsington_UpdateToolButtonObjective()
 {
 	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "toolButton");
@@ -285,8 +274,7 @@ void ZPOCorpsington_UpdateToolButtonObjective()
 
 	if (locked != 0)
 	{
-		// Still locked - toolButton is parented to the moving cart, so track its
-		// live world position each tick rather than a one-time hardcoded goal.
+		// Still locked - toolButton is parented to the moving cart
 		float pos[3];
 		GetEntPropVector(button, Prop_Data, "m_vecAbsOrigin", pos);
 
@@ -315,12 +303,10 @@ void ZPOCorpsington_OnToolButtonPressed(const char[] output, int caller, int act
 
 /**
  * Phase: 8 - CloseDoors
- * Summary: Pressing toolButton starts a 6 second delay before
- *   safehouse_button unlocks, with no entity output marking that delay.
+ * Summary: Press safehouse_button
  * Entity: safehouse_button (func_button, 66545)
  * Bot action: USE_BUTTON once unlocked
- * Confirmation: m_bLocked polled each tick; safehouse_button's OnPressed
- *   output ends the phase
+ * Confirmation: safehouse_button's OnPressed
  */
 void ZPOCorpsington_UpdateCloseDoorsObjective()
 {
@@ -348,17 +334,14 @@ void ZPOCorpsington_UpdateCloseDoorsObjective()
 
 /**
  * Phase: 9 - KillZombies
- * Summary: Bots just patrol the safehouse to
- *    find and fight anything trapped inside with them.
- * Entity: none (safehouse interior, no specific target)
- * Bot action: PATROL (survivors only)
- * Confirmation: none - resolved by the round's own win/loss state, not by
- *   this module
+ * Summary: Kill all zombies in safe house.
+ * Entity: none 
+ * Bot action: PATROL 
+ * Confirmation: none - round end
  */
 void ZPOCorpsington_OnSafehouseButtonPressed(const char[] output, int caller, int activator, float delay)
 {
-	// Final phase - no SetCurrentObjective call, and no matching STOPCMD;
-	// the patrol just runs until the round ends via CheckSH()'s own logic.
+
 	NavBotZPSModInterface.ResetObjective();
 	ZPOCorpsington_CommandSurvivors(NAVBOT_PLUGINCMD_PATROL);
 }

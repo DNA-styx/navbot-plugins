@@ -9,7 +9,7 @@
  *
  * Status: Unusable
  *
- * Issues: only two crates spawn when bots play. Player counting trigger?
+ * Issues: Only two crates spawn when bots play. Player counting trigger?
  *  
  */
 
@@ -59,7 +59,7 @@ void ZPOZomboeing_Think()
 
 /**
  * Phase: 0 - FindSupplies
- * Summary: Bots search for and deliver 3 supply crates one at a time.
+ * Summary: Search for and deliver 3 supply crates.
  * Entity: item_deliver / trigger_teleport / math_counter / trigger_once
  * Bot action: FIND_ITEM, then DROP_ITEM
  * Confirmation: all crates delivered

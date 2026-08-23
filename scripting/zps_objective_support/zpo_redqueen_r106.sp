@@ -9,7 +9,7 @@
  *
  * Status: WIP - Exit spawn, find keycard and open first door.
  *
- * Issues: 
+ * Issues: Bots not restocking on ammo, not able to find keycard
  */
 
 void ZPORedQueenR106_Init()

@@ -7,9 +7,9 @@
  * Module version: 0.14.3
  * Author: Claude.ai guided by DNA.styx
  *
- * Status: Under review after file format update
+ * Status: Usable
  *
- * Issues: Previously bots sometimes didn't plant fuse. To be reviewed.
+ * Issues: Bots don't plant the fuse or pick up the generator keys. To be reviewed.
  */
 
 static bool s_bBridgeDestroyed;
@@ -50,7 +50,7 @@ void ZPOHarvest_Think()
 
 /**
  * Phase: 0 - DefendHouse
- * Summary: Bots defend passively until the basement door opens.
+ * Summary: Defend until the basement door opens.
  * Entity: prop_door_rotating
  * Bot action: none (passive)
  * Confirmation: the door's OnFullyOpen output
@@ -74,7 +74,7 @@ void ZPOHarvest_OnBasementDoorOpen(const char[] output, int caller, int activato
 
 /**
  * Phase: 1 - Basement Lights
- * Summary: Survivors press a button that turns on basement lighting.
+ * Summary: Press a button that turns on basement lighting.
  * Entity: func_button
  * Bot action: USE_BUTTON
  * Confirmation: the button's OnPressed output
@@ -96,7 +96,7 @@ void ZPOHarvest_OnBasementLightsPressed(const char[] output, int caller, int act
 
 /**
  * Phase: 2 - FindFuse
- * Summary: Bots roam/defend until a human plants the fuse.
+ * Summary: Find and plant the fuse.
  * Entity: trigger_useable / logic_relay
  * Bot action: none (passive) until planted, then MOVETO clear of the blast
  * Confirmation: the socket's OnUsed output, then the relay's OnTrigger
@@ -126,8 +126,7 @@ void ZPOHarvest_OnFusePlanted(const char[] output, int caller, int activator, fl
 
 /**
  * Phase: 3 - Barn Key / Padlock
- * Summary: Bots reach the tunnel then roam/defend until a human uses the
- *   padlock.
+ * Summary: Access tunnel to barn, find keys, open door.
  * Entity: trigger_once / trigger_useable / func_button
  * Bot action: MOVETO tunnel end, then none (passive) until used, then
  *   USE_BUTTON
@@ -191,8 +190,7 @@ void ZPOHarvest_OnKeysUsed(const char[] output, int caller, int activator, float
 
 /**
  * Phase: 4 - FireUpGenerator
- * Summary: With the generator room door unlocked, bots press the generator
- *   button.
+ * Summary: Press the generator button.
  * Entity: func_button
  * Bot action: USE_BUTTON
  * Confirmation: the button's OnPressed output
@@ -216,8 +214,7 @@ void ZPOHarvest_OnGeneratorButtonPressed(const char[] output, int caller, int ac
 
 /**
  * Phase: 5 - RadioMilitary
- * Summary: Once the generator starts, bots press the radio button; this also
- *   kicks off Phase 6 and starts the Phase 7 timer.
+ * Summary: Press the radio button
  * Entity: func_button
  * Bot action: USE_BUTTON
  * Confirmation: the button's OnPressed output
@@ -252,8 +249,7 @@ void ZPOHarvest_OnRadioButtonPressed(const char[] output, int caller, int activa
 
 /**
  * Phase: 6 - Bridge
- * Summary: Bots destroy a breakable bridge section, cutting off a zombie
- *   route into the barn.
+ * Summary: Destroy the bridge
  * Entity: func_breakable
  * Bot action: DESTROY_ENTITY
  * Confirmation: the breakable's OnBreak output
@@ -270,8 +266,7 @@ void ZPOHarvest_OnBridgeDestroyed(const char[] output, int caller, int activator
 
 /**
  * Phase: 7 - DefendBarn / HitTheLights Searchlight
- * Summary: Bots defend passively until a timer sends them to the searchlight
- *   button.
+ * Summary: Defend the barn, then press the searchlight button.
  * Entity: func_button
  * Bot action: USE_BUTTON
  * Confirmation: the timer, then the button's OnPressed output
