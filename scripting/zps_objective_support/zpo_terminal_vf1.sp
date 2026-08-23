@@ -174,7 +174,7 @@ void ZPOTerminal_HookMainTerminal()
 
 /**
  * Phase: 0 - TriggerSearch
- * Summary: Bot walks to the trigger that starts the guard corpse search.
+ * Summary: Walk to the gate to trigger the guard corpse search.
  * Entity: trigger_once (446724)
  * Bot action: MOVETO trigger origin
  * Confirmation: case_guardkey's OnCase01-05 (tells us which case was
@@ -298,8 +298,7 @@ void ZPOTerminal_UpdateTriggerSearchObjective()
 
 /**
  * Phase: 1 - GuardCorpses
- * Summary: Bot captures the 5 guard corpse points in random order until
- *   the one holding the key is found.
+ * Summary: Captures the 5 guard corpse points to find the key.
  * Entity: 5x trigger_capturepoint_zp, corpsekeysearch{N}_capture_{a-e}
  * Bot action: MOVETO each capture point in turn
  * Confirmation: paired point_teleport's "target" keyvalue
@@ -367,7 +366,7 @@ void ZPOTerminal_OnCorpseCaptured(const char[] output, int caller, int activator
 
 /**
  * Phase: 2 - PickupKey
- * Summary: Bot picks up the guard key.
+ * Summary: Pick up the guard key.
  * Entity: item_deliver "guardkey" (1049651)
  * Bot action: FIND_ITEM for itemid "guardkey"
  * Confirmation: guardkey's OnItemTaken
@@ -387,7 +386,7 @@ void ZPOTerminal_OnGuardKeyTaken(const char[] output, int caller, int activator,
 
 /**
  * Phase: 3 - DeliverKey
- * Summary: Bot carries the key to the upper gate lock and uses it.
+ * Summary: Use the key to unlock the gate
  * Entity: trigger_useable (482101)
  * Bot action: USE_ITEM targeting the trigger_useable
  * Confirmation: trigger_useable's OnUsed
@@ -454,7 +453,7 @@ void ZPOTerminal_TryStartFoodCollection()
 
 /**
  * Phase: 4 - FoodCollection
- * Summary: Bot presses the 6 unlocked food buttons for the picked case.
+ * Summary: Find nd USE the 6 food buttons.
  * Entity: 6x func_button, see s_FoodCaseButtons hammerid table
  * Bot action: USE_BUTTON each in turn
  * Confirmation: math_food_collected's OnHitMax
@@ -551,7 +550,7 @@ void ZPOTerminal_OnGatesOpen(const char[] output, int caller, int activator, flo
 
 /**
  * Phase: 5 - CaptureMainTerminal
- * Summary: Bot captures the main terminal zone to select a bus.
+ * Summary: Capture the main terminal zone to select a bus.
  * Entity: trigger_capturepoint_zp "mainterminal_capture" (482536)
  * Bot action: MOVETO zone origin
  * Confirmation: mainterminal_capture's OnHumanCaptureCompleted
@@ -578,6 +577,6 @@ void ZPOTerminal_MoveToMainTerminal()
 // yet implemented.
 void ZPOTerminal_OnMainTerminalCaptured(const char[] output, int caller, int activator, float delay)
 {
-	PrintToChatAll("\x04[NAV]\x01 We've captured the bus - we'll stay here and guard!");
-	NavBotZPSModInterface.ResetObjective();
+	PrintToChatAll("\x04[NAV]\x01 We've captured the bus");
+		NavBotZPSModInterface.ResetObjective();
 }
