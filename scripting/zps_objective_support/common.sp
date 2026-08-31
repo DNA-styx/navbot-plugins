@@ -59,6 +59,14 @@ void InitObjectives()
 	{
 		ZPOGasdumpNF1_Init();
 	}
+		else if (strcmp(map, "zpo_area41_v7f") == 0)
+	{
+		ZPOArea41V7F_Init();
+	}
+		else if (strcmp(map, "zpo_dayofthedead_v3") == 0)
+	{
+		ZPODayOfTheDeadV3_Init();
+	}
 	else
 	{
 		LogMessage("Current map \"%s\" is not supported!", map);

@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_terminal_vf1 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.5.0
+ * Module version: 0.6.1
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: WIP. Search for and use Keycard. Find food. Find and guard Bus 
@@ -24,7 +24,8 @@ static bool s_FoodStarted;
 static bool s_FoodComplete;
 static int s_FoodButtons[6];
 static int s_FoodIndex;
-static bool s_FoodAreaAnnounced[3];
+static int s_FoodAreaTotal[3];
+static int s_FoodAreaCount[3];
 static int s_MainTerminal = INVALID_ENT_REFERENCE;
 
 // hammerid[6] per case_food outcome.
@@ -52,9 +53,10 @@ void ZPOTerminal_Init()
 	s_FoodComplete = false;
 	s_FoodIndex = 0;
 
-	for (int i = 0; i < sizeof(s_FoodAreaAnnounced); i++)
+	for (int i = 0; i < sizeof(s_FoodAreaTotal); i++)
 	{
-		s_FoodAreaAnnounced[i] = false;
+		s_FoodAreaTotal[i] = 0;
+		s_FoodAreaCount[i] = 0;
 	}
 
 	ZPOTerminal_HookGuardKeyCase();
@@ -64,6 +66,7 @@ void ZPOTerminal_Init()
 	ZPOTerminal_HookFoodCollected();
 	ZPOTerminal_HookGatesOpen();
 	ZPOTerminal_HookMainTerminal();
+	ZPOTerminal_HookFoodItem();
 	ZPOTerminal_MoveToSearchTrigger();
 }
 
@@ -172,6 +175,19 @@ void ZPOTerminal_HookMainTerminal()
 	HookSingleEntityOutput(entity, "OnHumanCaptureCompleted", ZPOTerminal_OnMainTerminalCaptured, true);
 }
 
+void ZPOTerminal_HookFoodItem()
+{
+	int item = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "item_deliver", "food1");
+
+	if (item == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_terminal_vf1: Failed to find food1 item_deliver!");
+		return;
+	}
+
+	HookSingleEntityOutput(item, "OnItemTaken", ZPOTerminal_OnFoodItemTaken, true);
+}
+
 /**
  * Phase: 0 - TriggerSearch
  * Summary: Walk to the gate to trigger the guard corpse search.
@@ -202,6 +218,17 @@ void ZPOTerminal_MoveToSearchTrigger()
 void ZPOTerminal_OnGuardKeyCaseChosen(const char[] output, int caller, int activator, float delay)
 {
 	s_CaseNumber = StringToInt(output[7]);
+}
+
+void ZPOTerminal_ChatMsgSurvivors(const char[] msg)
+{
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (IsClientInGame(client) && GetClientTeam(client) == 2)
+		{
+			PrintToChat(client, "\x04[NAV]\x01 %s", msg);
+		}
+	}
 }
 
 void ZPOTerminal_Think()
@@ -351,7 +378,7 @@ void ZPOTerminal_OnCorpseCaptured(const char[] output, int caller, int activator
 
 	if (strcmp(target, "guardkey", false) == 0)
 	{
-		PrintToChatAll("\x04[NAV]\x01 We've found the guard's key!");
+		ZPOTerminal_ChatMsgSurvivors("We've found the guard's key!");
 		ZPOTerminal_FindGuardKey();
 		return;
 	}
@@ -417,43 +444,64 @@ void ZPOTerminal_OnGateKeyUsed(const char[] output, int caller, int activator, f
 }
 
 // output is "OnCase01".."OnCase05" - the digit tells us which case won.
+// Tracking starts here regardless of key status, so human progress counts.
 void ZPOTerminal_OnFoodCaseChosen(const char[] output, int caller, int activator, float delay)
 {
 	s_FoodCase = StringToInt(output[7]);
+	ZPOTerminal_TrackFoodButtons();
 	ZPOTerminal_TryStartFoodCollection();
 }
 
-void ZPOTerminal_TryStartFoodCollection()
+// Returns which area a food button hammerid belongs to: 0=Market, 1=Snacks, 2=Food Court.
+int ZPOTerminal_GetFoodArea(int hammerid)
 {
-	if (!s_KeyDelivered || s_FoodCase == -1)
+	switch (hammerid)
 	{
-		return;
+		case 679765, 679873: return 0;
+		case 707835, 707897: return 1;
 	}
 
+	return 2;
+}
+
+// Populates s_FoodButtons and hooks every button's OnPressed, independent
+// of key delivery, so human progress is tracked from the moment it unlocks.
+void ZPOTerminal_TrackFoodButtons()
+{
 	for (int i = 0; i < sizeof(s_FoodButtons); i++)
 	{
-		int entity = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", s_FoodCaseButtons[s_FoodCase - 1][i]);
+		int hammerid = s_FoodCaseButtons[s_FoodCase - 1][i];
+		int entity = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", hammerid);
 
 		if (entity == INVALID_ENT_REFERENCE)
 		{
-			LogError("zpo_terminal_vf1: Failed to find food button! Hammer ID: %i", s_FoodCaseButtons[s_FoodCase - 1][i]);
+			LogError("zpo_terminal_vf1: Failed to find food button! Hammer ID: %i", hammerid);
 			s_FoodButtons[i] = INVALID_ENT_REFERENCE;
 			continue;
 		}
 
 		s_FoodButtons[i] = EntIndexToEntRef(entity);
+		s_FoodAreaTotal[ZPOTerminal_GetFoodArea(hammerid)]++;
 		HookSingleEntityOutput(entity, "OnPressed", ZPOTerminal_OnFoodButtonPressed, true);
+	}
+}
+
+void ZPOTerminal_TryStartFoodCollection()
+{
+	if (!s_KeyDelivered || s_FoodCase == -1 || s_FoodComplete)
+	{
+		return;
 	}
 
 	s_FoodStarted = true;
 	s_FoodIndex = 0;
-	PrintToChatAll("\x04[NAV]\x01 We are getting the food now!");
+	ZPOTerminal_ChatMsgSurvivors("We are getting the food now!");
 	ZPOTerminal_MoveToNextFoodButton();
 }
 
 /**
  * Phase: 4 - FoodCollection
- * Summary: Find nd USE the 6 food buttons.
+ * Summary: Find and USE the 6 food buttons.
  * Entity: 6x func_button, see s_FoodCaseButtons hammerid table
  * Bot action: USE_BUTTON each in turn
  * Confirmation: math_food_collected's OnHitMax
@@ -490,50 +538,31 @@ void ZPOTerminal_UpdateFoodObjective()
 	}
 }
 
-// Only announces when a bot pressed it, not a human.
+// Fires for every press, by anyone. Announces once an area's total is met.
 void ZPOTerminal_OnFoodButtonPressed(const char[] output, int caller, int activator, float delay)
 {
-	if (!IsFakeClient(activator))
+	int hammerid = GetEntProp(caller, Prop_Data, "m_iHammerID");
+	int area = ZPOTerminal_GetFoodArea(hammerid);
+
+	s_FoodAreaCount[area]++;
+
+	if (s_FoodAreaCount[area] < s_FoodAreaTotal[area])
 	{
 		return;
 	}
 
-	int hammerid = GetEntProp(caller, Prop_Data, "m_iHammerID");
-	ZPOTerminal_AnnounceFoodButtonUsed(hammerid);
-}
-
-// Announces the first time food is collected from an area, not every button.
-void ZPOTerminal_AnnounceFoodButtonUsed(int hammerid)
-{
-	int area;
 	char name[16];
 
-	switch (hammerid)
+	switch (area)
 	{
-		case 679765, 679873:
-		{
-			area = 0;
-			strcopy(name, sizeof(name), "the Market");
-		}
-		case 707835, 707897:
-		{
-			area = 1;
-			strcopy(name, sizeof(name), "the Snacks area");
-		}
-		default:
-		{
-			area = 2;
-			strcopy(name, sizeof(name), "the Food Court");
-		}
+		case 0: strcopy(name, sizeof(name), "the Market");
+		case 1: strcopy(name, sizeof(name), "the Snacks area");
+		default: strcopy(name, sizeof(name), "the Food Court");
 	}
 
-	if (s_FoodAreaAnnounced[area])
-	{
-		return;
-	}
-
-	s_FoodAreaAnnounced[area] = true;
-	PrintToChatAll("\x04[NAV]\x01 We've got food from %s!", name);
+	char msg[64];
+	Format(msg, sizeof(msg), "We've got all the food from %s!", name);
+	ZPOTerminal_ChatMsgSurvivors(msg);
 }
 
 void ZPOTerminal_OnFoodCollected(const char[] output, int caller, int activator, float delay)
@@ -544,12 +573,32 @@ void ZPOTerminal_OnFoodCollected(const char[] output, int caller, int activator,
 
 void ZPOTerminal_OnGatesOpen(const char[] output, int caller, int activator, float delay)
 {
-	PrintToChatAll("\x04[NAV]\x01 We have unlocked the upper gate!");
+	ZPOTerminal_ChatMsgSurvivors("We have unlocked the upper gate!");
+	ZPOTerminal_FindFoodItem();
+}
+
+/**
+ * Phase: 5 - PickupFood
+ * Summary: Pick up food1 before heading to the main terminal.
+ * Entity: item_deliver "food1" (1049635)
+ * Bot action: FIND_ITEM for itemid "food1"
+ * Confirmation: food1's OnItemTaken
+ */
+void ZPOTerminal_FindFoodItem()
+{
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveItemSearchID("food1");
+	NavBotZPSModInterface.SetObjectiveDetectionRadius(999999.0);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_FIND_ITEM);
+}
+
+void ZPOTerminal_OnFoodItemTaken(const char[] output, int caller, int activator, float delay)
+{
 	ZPOTerminal_MoveToMainTerminal();
 }
 
 /**
- * Phase: 5 - CaptureMainTerminal
+ * Phase: 6 - CaptureMainTerminal
  * Summary: Capture the main terminal zone to select a bus.
  * Entity: trigger_capturepoint_zp "mainterminal_capture" (482536)
  * Bot action: MOVETO zone origin
@@ -573,10 +622,10 @@ void ZPOTerminal_MoveToMainTerminal()
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 }
 
-// Further phases (bus selection, item delivery, cabin/path, escape) not
-// yet implemented.
+// Further phases (bus item delivery, cabin/path, escape) not yet
+// implemented - bots fall back to following the nearest player.
 void ZPOTerminal_OnMainTerminalCaptured(const char[] output, int caller, int activator, float delay)
 {
-	PrintToChatAll("\x04[NAV]\x01 We've captured the bus");
-		NavBotZPSModInterface.ResetObjective();
+	ZPOTerminal_ChatMsgSurvivors("We've captured the bus");
+	NavBotZPSModInterface.ResetObjective();
 }
