@@ -67,6 +67,10 @@ void InitObjectives()
 	{
 		ZPODayOfTheDeadV3_Init();
 	}
+		else if (strcmp(map, "zpo_abandoned_base_r2") == 0)
+	{
+		ZPOAbandonedBaseR2_Init();
+	}
 	else
 	{
 		LogMessage("Current map \"%s\" is not supported!", map);

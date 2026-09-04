@@ -34,6 +34,7 @@ float g_DetectionRadius;
 #include "zps_objective_support/zpo_gasdump_nf1.sp"
 #include "zps_objective_support/zpo_area41_v7f.sp"
 #include "zps_objective_support/zpo_dayofthedead_v3.sp"
+#include "zps_objective_support/zpo_abandoned_base_r2.sp"
 #include "zps_objective_support/common.sp"
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
