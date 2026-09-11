@@ -71,6 +71,14 @@ void InitObjectives()
 	{
 		ZPOAbandonedBaseR2_Init();
 	}
+		else if (strcmp(map, "zpo_blackbird_v4") == 0)
+	{
+		ZPOBlackbird_Init();
+	}
+		else if (strcmp(map, "zpo_snowblind_v2") == 0)
+	{
+		ZPOSnowblindV2_Init();
+	}
 	else
 	{
 		LogMessage("Current map \"%s\" is not supported!", map);
