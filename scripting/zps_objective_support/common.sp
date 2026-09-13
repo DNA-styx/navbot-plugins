@@ -79,6 +79,10 @@ void InitObjectives()
 	{
 		ZPOSnowblindV2_Init();
 	}
+		else if (strcmp(map, "zpo_snowbound_dc_v3") == 0)
+	{
+		ZPOSnowboundDCv3_Init();
+	}
 	else
 	{
 		LogMessage("Current map \"%s\" is not supported!", map);
