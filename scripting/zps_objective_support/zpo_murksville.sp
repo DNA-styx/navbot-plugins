@@ -4,13 +4,12 @@
  * NavBot ZPS objective support module for the zpo_murksville map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.12.0
+ * Module version: 0.14.0
  * Author: Claude.ai guided by DNA.styx
  *
- * Status: Unusable
+ * Status: WIP
  *
- * Issues: Human bots get attracted to water and die. bots not pushing the 
- * 			cart reliably for unknown reason
+ * Issues: Survivor bots not pushing cart reliably
  */
 
 enum
@@ -21,12 +20,16 @@ enum
 };
 
 static int s_CurrentPhase = ZPOMURK_PHASE_WAITFORCART;
+static float s_LastCartPos[3];
+static bool s_bCartPosKnown;
 
 void ZPOMurksville_Init()
 {
 	g_ThinkFunc = ZPOMurksville_Think;
 	s_CurrentPhase = ZPOMURK_PHASE_WAITFORCART;
+	s_bCartPosKnown = false;
 
+	ZPOMurksville_MoveToCart();
 	ZPOMurksville_HookDrainBoatCompletionSignals();
 }
 
@@ -45,8 +48,19 @@ void ZPOMurksville_Think()
 	}
 }
 
-void ZPOMurksville_HookDrainBoatCompletionSignals()
+static void ZPOMurksville_HookDrainBoatCompletionSignals()
 {
+	int cartTrigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "push_pump_trigger");
+
+	if (cartTrigger == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_murksville: Failed to find the push_pump_trigger trigger_multiple!");
+	}
+	else
+	{
+		HookSingleEntityOutput(cartTrigger, "OnStartTouch", ZPOMurksville_OnCartTriggerTouched, false);
+	}
+
 	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door_rotating", "rotatepump");
 
 	if (door == INVALID_ENT_REFERENCE)
@@ -73,29 +87,61 @@ void ZPOMurksville_HookDrainBoatCompletionSignals()
 /**
  * Phase: 0a - DrainBoat (cart stage)
  * Summary: Bots stand in the cart-push trigger; the cart advances based on
- *   player count.
- * Entity: trigger_multiple (473433)
+ *   player count. An initial MOVETO fires in Init(), then again on
+ *   confirmed touch or when the trigger's position has moved.
+ * Entity: trigger_multiple
  * Bot action: MOVETO
  * Confirmation: rotatepump fully opens
  */
-void ZPOMurksville_UpdateCartTriggerObjective()
+static void ZPOMurksville_MoveToCart()
 {
-	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "push_pump_trigger");
+	float goal[3] = { 192.5, -99.1, -592.0 };
 
-	if (trigger == INVALID_ENT_REFERENCE)
-	{
-		return;
-	}
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 
+	s_LastCartPos = goal;
+	s_bCartPosKnown = true;
+}
+
+static void ZPOMurksville_OnCartTriggerTouched(const char[] output, int caller, int activator, float delay)
+{
 	float pos[3];
-	GetEntPropVector(trigger, Prop_Data, "m_vecAbsOrigin", pos);
+	GetEntPropVector(caller, Prop_Data, "m_vecAbsOrigin", pos);
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(pos);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+
+	s_LastCartPos = pos;
+	s_bCartPosKnown = true;
 }
 
-void ZPOMurksville_OnRotatePumpFullyOpen(const char[] output, int caller, int activator, float delay)
+static void ZPOMurksville_UpdateCartTriggerObjective()
+{
+	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "push_pump_trigger");
+
+	if (trigger != INVALID_ENT_REFERENCE)
+	{
+		float pos[3];
+		GetEntPropVector(trigger, Prop_Data, "m_vecAbsOrigin", pos);
+
+		bool moved = !s_bCartPosKnown || pos[0] != s_LastCartPos[0] || pos[1] != s_LastCartPos[1] || pos[2] != s_LastCartPos[2];
+
+		if (moved)
+		{
+			NavBotZPSModInterface.ResetObjective();
+			NavBotZPSModInterface.SetObjectiveMoveGoal(pos);
+			NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+
+			s_LastCartPos = pos;
+			s_bCartPosKnown = true;
+		}
+	}
+}
+
+static void ZPOMurksville_OnRotatePumpFullyOpen(const char[] output, int caller, int activator, float delay)
 {
 	s_CurrentPhase = ZPOMURK_PHASE_WAITFORPUMP;
 }
@@ -107,24 +153,22 @@ void ZPOMurksville_OnRotatePumpFullyOpen(const char[] output, int caller, int ac
  * Bot action: MOVETO
  * Confirmation: pump cart reaches the end of its track
  */
-void ZPOMurksville_UpdatePumpTriggerObjective()
+static void ZPOMurksville_UpdatePumpTriggerObjective()
 {
 	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "push_pump_trigger2");
 
-	if (trigger == INVALID_ENT_REFERENCE)
+	if (trigger != INVALID_ENT_REFERENCE)
 	{
-		return;
+		float pos[3];
+		GetEntPropVector(trigger, Prop_Data, "m_vecAbsOrigin", pos);
+
+		NavBotZPSModInterface.ResetObjective();
+		NavBotZPSModInterface.SetObjectiveMoveGoal(pos);
+		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 	}
-
-	float pos[3];
-	GetEntPropVector(trigger, Prop_Data, "m_vecAbsOrigin", pos);
-
-	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveMoveGoal(pos);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 }
 
-void ZPOMurksville_OnPumpFinished(const char[] output, int caller, int activator, float delay)
+static void ZPOMurksville_OnPumpFinished(const char[] output, int caller, int activator, float delay)
 {
 	NavBotZPSModInterface.ResetObjective();
 
