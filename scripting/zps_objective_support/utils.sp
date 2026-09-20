@@ -61,3 +61,43 @@ void LogDebugMessage(const char[] format, any ...)
 
 	LogMessage("[DEBUG] %s", buffer);
 }
+
+/**
+ * Checks if every active NavBot can currently path to the given position.
+ * Logs (debug-gated) each bot that can't reach it.
+ *
+ * @param goal      World position to test.
+ * @return          True if every active NavBot can reach the goal, false if at least one cannot.
+ */
+
+bool CanAllBotsReachGoal(const float goal[3])
+{
+	bool allReachable = true;
+
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (!IsClientInGame(client) || !NavBotManager.IsNavBot(client))
+		{
+			continue;
+		}
+
+		NavBot bot = NavBotManager.GetNavBotByIndex(client);
+
+		if (bot == NULL_NAVBOT)
+		{
+			continue;
+		}
+
+		MeshNavigator nav = new MeshNavigator();
+		bool reachable = nav.ComputeToPos(bot, goal);
+		delete nav;
+
+		if (!reachable)
+		{
+			allReachable = false;
+			LogDebugMessage("MOVETO goal unreachable for bot \"%N\" (client %i). Goal: %.1f %.1f %.1f", client, client, goal[0], goal[1], goal[2]);
+		}
+	}
+
+	return allReachable;
+}
