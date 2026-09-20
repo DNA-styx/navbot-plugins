@@ -4,27 +4,24 @@
  * NavBot ZPS objective support module for the zpo_tanker map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.17.5
+ * Module version: 0.31.0
  * Author: Claude.ai guided by DNA.styx
  *
- * Status: Under review after file format change
+ * Status: {good / usable / partially complete / unusable}
  *
- * Issues: Bots can plant C4 but don't stand at it
+ * Issues: PumpDoor1 (Phase 2) is sometimes not found by ActivatePlantC4,
+ *   cause unconfirmed. GuardC4 (Phase 3) has no way to hold a bot in
+ *   place, so a human is required to complete C4 arming.
  */
-
-enum ZPOTankerPhase
-{
-	ZPOTankerPhase_None = 0,
-	ZPOTankerPhase_FindAccessCode,
-	ZPOTankerPhase_EnterCode,
-	ZPOTankerPhase_HitHatchRelease,
-	ZPOTankerPhase_EscapeToBoats
-};
 
 static bool s_bPCP1Destroyed;
 static bool s_bPCP2Destroyed;
 static bool s_bPCP3Destroyed;
-static ZPOTankerPhase s_CurrentPhase;
+static bool s_bAccessCodeButtonHooked;
+static bool s_bKeypadButtonHooked;
+static bool s_bHatchButtonHooked;
+static bool s_bLifeboat1Launched;
+static bool s_bZombiesKilled;
 
 void ZPOTanker_Init()
 {
@@ -33,32 +30,21 @@ void ZPOTanker_Init()
 	s_bPCP1Destroyed = false;
 	s_bPCP2Destroyed = false;
 	s_bPCP3Destroyed = false;
-	s_CurrentPhase = ZPOTankerPhase_None;
+	s_bAccessCodeButtonHooked = false;
+	s_bKeypadButtonHooked = false;
+	s_bHatchButtonHooked = false;
+	s_bLifeboat1Launched = false;
+	s_bZombiesKilled = false;
 
 	ZPOTanker_ActivateInvestigate();
 }
 
 void ZPOTanker_Think()
 {
-	switch (s_CurrentPhase)
-	{
-		case ZPOTankerPhase_FindAccessCode:
-		{
-			ZPOTanker_PollAccessCodeButton();
-		}
-		case ZPOTankerPhase_EnterCode:
-		{
-			ZPOTanker_PollKeypadButton();
-		}
-		case ZPOTankerPhase_HitHatchRelease:
-		{
-			ZPOTanker_PollHatchButton();
-		}
-		case ZPOTankerPhase_EscapeToBoats:
-		{
-			ZPOTanker_PollLifeboat1Launch();
-		}
-	}
+	ZPOTanker_PollAccessCodeButton();
+	ZPOTanker_PollKeypadButton();
+	ZPOTanker_PollHatchButton();
+	ZPOTanker_PollLifeboat1Launch();
 }
 
 /**
@@ -68,14 +54,12 @@ void ZPOTanker_Think()
  * Bot action: MOVETO
  * Confirmation: OnStartTouch.
  */
-void ZPOTanker_ActivateInvestigate()
+static void ZPOTanker_ActivateInvestigate()
 {
-	float goal[3];
-	goal[0] = 4124.01;
-	goal[1] = -5782.0;
-	goal[2] = 414.0;
+	float goal[3] = { 4124.0, -5782.0, 414.0 };
 
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 
 	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_once", "Investigate-Trigger");
@@ -96,61 +80,61 @@ void ZPOTanker_ActivateInvestigate()
  * Bot action: DESTROY_ENTITY
  * Confirmation: each breakable's OnBreak.
  */
-void ZPOTanker_ActivateDestroyPCP(const char[] output, int caller, int activator, float delay)
-{
-	const int hammerid1 = 7064;
-	const int hammerid2 = 332454;
-	const int hammerid3 = 332458;
+static const int PCP_HAMMERID_1 = 7064;
+static const int PCP_HAMMERID_2 = 332454;
+static const int PCP_HAMMERID_3 = 332458;
 
-	int breakable1 = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_breakable", hammerid1);
-	int breakable2 = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_breakable", hammerid2);
-	int breakable3 = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_breakable", hammerid3);
+static void ZPOTanker_ActivateDestroyPCP(const char[] output, int caller, int activator, float delay)
+{
+	int breakable1 = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_breakable", PCP_HAMMERID_1);
+	int breakable2 = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_breakable", PCP_HAMMERID_2);
+	int breakable3 = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_breakable", PCP_HAMMERID_3);
 
 	if (breakable1 == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_tanker: Failed to find PCP-Breakable! Hammer ID: %i", hammerid1);
+		LogError("zpo_tanker: Failed to find PCP-Breakable! Hammer ID: %i", PCP_HAMMERID_1);
 	}
 	else
 	{
-		HookSingleEntityOutput(breakable1, "OnBreak", ZPOTanker_OnPCP1Break, true);
+		HookSingleEntityOutput(breakable1, "OnBreak", ZPOTanker_OnPCPBreak, true);
 	}
 
 	if (breakable2 == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_tanker: Failed to find PCP-Breakable! Hammer ID: %i", hammerid2);
+		LogError("zpo_tanker: Failed to find PCP-Breakable! Hammer ID: %i", PCP_HAMMERID_2);
 	}
 	else
 	{
-		HookSingleEntityOutput(breakable2, "OnBreak", ZPOTanker_OnPCP2Break, true);
+		HookSingleEntityOutput(breakable2, "OnBreak", ZPOTanker_OnPCPBreak, true);
 	}
 
 	if (breakable3 == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_tanker: Failed to find PCP-Breakable! Hammer ID: %i", hammerid3);
+		LogError("zpo_tanker: Failed to find PCP-Breakable! Hammer ID: %i", PCP_HAMMERID_3);
 	}
 	else
 	{
-		HookSingleEntityOutput(breakable3, "OnBreak", ZPOTanker_OnPCP3Break, true);
+		HookSingleEntityOutput(breakable3, "OnBreak", ZPOTanker_OnPCPBreak, true);
 	}
 
 	ZPOTanker_TargetNextPCP();
 }
 
-void ZPOTanker_TargetNextPCP()
+static void ZPOTanker_TargetNextPCP()
 {
 	int entity = INVALID_ENT_REFERENCE;
 
 	if (!s_bPCP1Destroyed)
 	{
-		entity = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_breakable", 7064);
+		entity = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_breakable", PCP_HAMMERID_1);
 	}
 	else if (!s_bPCP2Destroyed)
 	{
-		entity = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_breakable", 332454);
+		entity = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_breakable", PCP_HAMMERID_2);
 	}
 	else if (!s_bPCP3Destroyed)
 	{
-		entity = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_breakable", 332458);
+		entity = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_breakable", PCP_HAMMERID_3);
 	}
 
 	if (entity == INVALID_ENT_REFERENCE)
@@ -164,33 +148,35 @@ void ZPOTanker_TargetNextPCP()
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_DESTROY_ENTITY);
 }
 
-void ZPOTanker_OnPCP1Break(const char[] output, int caller, int activator, float delay)
+static void ZPOTanker_OnPCPBreak(const char[] output, int caller, int activator, float delay)
 {
-	s_bPCP1Destroyed = true;
-	ZPOTanker_TargetNextPCP();
-}
+	int hammerid = GetEntProp(caller, Prop_Data, "m_iHammerID");
 
-void ZPOTanker_OnPCP2Break(const char[] output, int caller, int activator, float delay)
-{
-	s_bPCP2Destroyed = true;
-	ZPOTanker_TargetNextPCP();
-}
+	if (hammerid == PCP_HAMMERID_1)
+	{
+		s_bPCP1Destroyed = true;
+	}
+	else if (hammerid == PCP_HAMMERID_2)
+	{
+		s_bPCP2Destroyed = true;
+	}
+	else if (hammerid == PCP_HAMMERID_3)
+	{
+		s_bPCP3Destroyed = true;
+	}
 
-void ZPOTanker_OnPCP3Break(const char[] output, int caller, int activator, float delay)
-{
-	s_bPCP3Destroyed = true;
 	ZPOTanker_TargetNextPCP();
 }
 
 /**
  * Phase: 2 - PlantC4
- * Summary: Bots press the button then move near it while arming runs.
+ * Summary: Bots press the button once the pump door opens.
  * Entity: func_button
- * Bot action: USE_BUTTON, then MOVETO.
+ * Bot action: USE_BUTTON.
  * Confirmation: PumpDoor1's OnOpen starts the phase; C4-Button's OnPressed
- *   advances to MOVETO.
+ *   completes it.
  */
-void ZPOTanker_ActivatePlantC4()
+static void ZPOTanker_ActivatePlantC4()
 {
 	int door = INVALID_ENT_REFERENCE;
 	int maxEntities = GetMaxEntities();
@@ -221,7 +207,7 @@ void ZPOTanker_ActivatePlantC4()
 	HookSingleEntityOutput(door, "OnOpen", ZPOTanker_OnPumpDoor1Open, true);
 }
 
-void ZPOTanker_OnPumpDoor1Open(const char[] output, int caller, int activator, float delay)
+static void ZPOTanker_OnPumpDoor1Open(const char[] output, int caller, int activator, float delay)
 {
 	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "C4-Button");
 
@@ -236,32 +222,40 @@ void ZPOTanker_OnPumpDoor1Open(const char[] output, int caller, int activator, f
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 
 	HookSingleEntityOutput(button, "OnPressed", ZPOTanker_OnC4ButtonPressed, true);
-
-	s_CurrentPhase = ZPOTankerPhase_FindAccessCode;
 }
 
-void ZPOTanker_OnC4ButtonPressed(const char[] output, int caller, int activator, float delay)
+/**
+ * Phase: 3 - GuardC4
+ * Summary: Bots hold a position near the button while arming runs.
+ * Entity: n/a
+ * Bot action: MOVETO
+ * Confirmation: n/a
+ */
+static void ZPOTanker_OnC4ButtonPressed(const char[] output, int caller, int activator, float delay)
 {
 	NavBotZPSModInterface.ResetObjective();
 
-	float goal[3];
-	goal[0] = 4332.271973;
-	goal[1] = -6540.309082;
-	goal[2] = 304.031250;
+	float goal[3] = { 4332.3, -6540.3, 304.0 };
 
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 }
 
 /**
- * Phase: 3 - FindAccessCode
+ * Phase: 4 - FindAccessCode
  * Summary: Access code button needs pressed.
  * Entity: func_button
  * Bot action: USE_BUTTON
- * Confirmation: OnPressed
+ * Confirmation: found by name each tick.
  */
-void ZPOTanker_PollAccessCodeButton()
+static void ZPOTanker_PollAccessCodeButton()
 {
+	if (s_bAccessCodeButtonHooked)
+	{
+		return;
+	}
+
 	const int originalHammerID = 5038;
 	int button = INVALID_ENT_REFERENCE;
 
@@ -278,28 +272,27 @@ void ZPOTanker_PollAccessCodeButton()
 		return;
 	}
 
-	s_CurrentPhase = ZPOTankerPhase_None;
-	HookSingleEntityOutput(button, "OnPressed", ZPOTanker_OnAccessCodeButtonPressed, true);
+	s_bAccessCodeButtonHooked = true;
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveUseButton(button);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 }
 
-void ZPOTanker_OnAccessCodeButtonPressed(const char[] output, int caller, int activator, float delay)
-{
-	s_CurrentPhase = ZPOTankerPhase_EnterCode;
-}
-
 /**
- * Phase: 4 - EnterCode
+ * Phase: 5 - EnterCode
  * Summary: Keypad Button needs pressed.
  * Entity: func_button
  * Bot action: USE_BUTTON
- * Confirmation: OnPressed.
+ * Confirmation: found by name each tick.
  */
-void ZPOTanker_PollKeypadButton()
+static void ZPOTanker_PollKeypadButton()
 {
+	if (s_bKeypadButtonHooked)
+	{
+		return;
+	}
+
 	const int originalHammerID = 205026;
 	int button = INVALID_ENT_REFERENCE;
 
@@ -316,7 +309,7 @@ void ZPOTanker_PollKeypadButton()
 		return;
 	}
 
-	s_CurrentPhase = ZPOTankerPhase_None;
+	s_bKeypadButtonHooked = true;
 	HookSingleEntityOutput(button, "OnPressed", ZPOTanker_OnKeypadButtonPressed, true);
 
 	NavBotZPSModInterface.ResetObjective();
@@ -324,20 +317,38 @@ void ZPOTanker_PollKeypadButton()
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 }
 
-void ZPOTanker_OnKeypadButtonPressed(const char[] output, int caller, int activator, float delay)
+/**
+ * Phase: 6 - Guard the Hatches
+ * Summary: Bots hold a position near the hatches.
+ * Entity: n/a
+ * Bot action: MOVETO
+ * Confirmation: n/a
+ */
+static void ZPOTanker_OnKeypadButtonPressed(const char[] output, int caller, int activator, float delay)
 {
-	s_CurrentPhase = ZPOTankerPhase_HitHatchRelease;
+	NavBotZPSModInterface.ResetObjective();
+
+	float goal[3] = { 4881.6, -5851.5, 424.0 };
+
+	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	CanAllBotsReachGoal(goal);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 }
 
 /**
- * Phase: 5 - HitHatchRelease
+ * Phase: 7 - HitHatchRelease
  * Summary: HitHatchRelease button needs pressed.
  * Entity: func_button
  * Bot action: USE_BUTTON.
  * Confirmation: OnPressed.
  */
-void ZPOTanker_PollHatchButton()
+static void ZPOTanker_PollHatchButton()
 {
+	if (s_bHatchButtonHooked)
+	{
+		return;
+	}
+
 	const int originalHammerID = 6922;
 	int button = INVALID_ENT_REFERENCE;
 
@@ -354,7 +365,7 @@ void ZPOTanker_PollHatchButton()
 		return;
 	}
 
-	s_CurrentPhase = ZPOTankerPhase_None;
+	s_bHatchButtonHooked = true;
 	HookSingleEntityOutput(button, "OnPressed", ZPOTanker_OnHatchButtonPressed, true);
 
 	NavBotZPSModInterface.ResetObjective();
@@ -362,37 +373,90 @@ void ZPOTanker_PollHatchButton()
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 }
 
-void ZPOTanker_OnHatchButtonPressed(const char[] output, int caller, int activator, float delay)
+static void ZPOTanker_OnHatchButtonPressed(const char[] output, int caller, int activator, float delay)
 {
 	ZPOTanker_ActivateEscapeToBoats();
 }
 
 /**
- * Phase: 6 - EscapeToBoats
- * Summary: Press lifeboat button until engine starts
- * Entity: func_button
+ * Phase: 8 - EscapeToBoats
+ * Summary: Press lifeboat button until engine starts. Either boat's track
+ *   starting to move kills all zombies, forcing them to respawn near the
+ *   water.
+ * Entity: func_button / path_track
  * Bot action: USE_BUTTON
  * Confirmation: Button's name changing to "Zero".
  */
-void ZPOTanker_ActivateEscapeToBoats()
+static void ZPOTanker_ActivateEscapeToBoats()
 {
 	int boat = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "lifeboat1_button");
 
 	if (boat == INVALID_ENT_REFERENCE)
 	{
 		LogError("zpo_tanker: Failed to find lifeboat1_button!");
+	}
+	else
+	{
+		NavBotZPSModInterface.ResetObjective();
+		NavBotZPSModInterface.SetObjectiveUseButton(boat);
+		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
+	}
+
+	int track1 = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "lifeboat1_track2");
+
+	if (track1 == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_tanker: Failed to find lifeboat1_track2!");
+	}
+	else
+	{
+		HookSingleEntityOutput(track1, "OnPass", ZPOTanker_KillZombies, true);
+	}
+
+	int track2 = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "lifeboat2_track2");
+
+	if (track2 == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_tanker: Failed to find lifeboat2_track2!");
+	}
+	else
+	{
+		HookSingleEntityOutput(track2, "OnPass", ZPOTanker_KillZombies, true);
+	}
+}
+
+static void ZPOTanker_KillZombies(const char[] output, int caller, int activator, float delay)
+{
+	if (s_bZombiesKilled)
+	{
 		return;
 	}
 
-	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveUseButton(boat);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
+	s_bZombiesKilled = true;
 
-	s_CurrentPhase = ZPOTankerPhase_EscapeToBoats;
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsClientInGame(i))
+		{
+			continue;
+		}
+
+		if (GetClientTeam(i) != 3)
+		{
+			continue;
+		}
+
+		ServerCommand("sm_slay #%d", GetClientUserId(i));
+	}
 }
 
-void ZPOTanker_PollLifeboat1Launch()
+static void ZPOTanker_PollLifeboat1Launch()
 {
+	if (s_bLifeboat1Launched)
+	{
+		return;
+	}
+
 	int boat = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "lifeboat1_button");
 
 	if (boat == INVALID_ENT_REFERENCE)
@@ -408,20 +472,20 @@ void ZPOTanker_PollLifeboat1Launch()
 		return;
 	}
 
-	s_CurrentPhase = ZPOTankerPhase_None;
+	s_bLifeboat1Launched = true;
 
 	ZPOTanker_ActivateReachIsland();
 }
 
 /**
- * Phase: 7 - ReachIsland
+ * Phase: 9 - ReachIsland
  * Summary: The bot is carried to the island automatically by the boat,
  *   then moves further inland.
  * Entity: trigger_multiple
  * Bot action: MOVETO once the island is reached.
  * Confirmation: OnStartTouch.
  */
-void ZPOTanker_ActivateReachIsland()
+static void ZPOTanker_ActivateReachIsland()
 {
 	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "Island-Trigger");
 
@@ -434,13 +498,13 @@ void ZPOTanker_ActivateReachIsland()
 	HookSingleEntityOutput(trigger, "OnStartTouch", ZPOTanker_OnIslandReached, true);
 }
 
-void ZPOTanker_OnIslandReached(const char[] output, int caller, int activator, float delay)
+static void ZPOTanker_OnIslandReached(const char[] output, int caller, int activator, float delay)
 {
-	float goal[3];
-	goal[0] = 6352.106445;
-	goal[1] = 628.758606;
-	goal[2] = 503.162079;
+	NavBotZPSModInterface.ResetObjective();
+
+	float goal[3] = { 6352.1, 628.8, 503.2 };
 
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 }
