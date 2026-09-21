@@ -83,6 +83,10 @@ void InitObjectives()
 	{
 		ZPOSnowboundDCv3_Init();
 	}
+		else if (strcmp(map, "zpo_noexit_h2") == 0)
+	{
+		ZPONoexitH2_Init();
+	}
 	else
 	{
 		LogMessage("Current map \"%s\" is not supported!", map);
