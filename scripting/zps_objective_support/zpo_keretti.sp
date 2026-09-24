@@ -4,12 +4,12 @@
  * NavBot ZPS objective support module for the zpo_keretti map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.11.4
+ * Module version: 0.12.3
  * Author: Claude.ai guided by DNA.styx
  *
- * Status: Usable
+ * Status: {good / usable / partially complete / unusable}
  *
- * Issues: Bots get stuck in a loop at the radio button. Don't camp the mine door
+ * Issues: {description of things that do not work, or "none known"}
  */
 
 // s_CurrentPhase values
@@ -23,6 +23,7 @@ static bool s_FilesPhaseActive = false;
 static int s_CurrentPhase = PHASE_MINEDOOR;
 static bool s_MineDoorDone = false;
 static bool s_WarehouseDoorDone = false;
+static bool s_RadioButtonPressed = false;
 static bool s_RadioDone = false;
 static bool s_FilesDone = false;
 static int s_ParallelOrder[2] = { 0, 1 }; // 0 = Radio, 1 = Files
@@ -46,13 +47,15 @@ void ZPOKeretti_Init()
 	s_CurrentPhase = PHASE_MINEDOOR;
 	s_MineDoorDone = false;
 	s_WarehouseDoorDone = false;
+	s_RadioButtonPressed = false;
 	s_RadioDone = false;
 	s_FilesDone = false;
 	s_SideTaskActive = false;
 	s_SideTaskStep = SIDETASK_NONE;
 	s_SideTaskBotRef = INVALID_ENT_REFERENCE;
 
-	// Every completion/reversion signal is hooked here
+	// Every completion/reversion signal is hooked here, before any
+	// objective is assigned.
 
 	// Phase 0 (MineDoor) completion.
 	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door", "mine_door");
@@ -164,7 +167,7 @@ void ZPOKeretti_Think()
 
 // Helpers used by more than one phase.
 
-void ZPOKeretti_ChatMsgSurvivors(const char[] msg)
+static void ZPOKeretti_ChatMsgSurvivors(const char[] msg)
 {
 	for (int client = 1; client <= MaxClients; client++)
 	{
@@ -175,18 +178,18 @@ void ZPOKeretti_ChatMsgSurvivors(const char[] msg)
 	}
 }
 
-void ZPOKeretti_ShuffleParallelOrder()
+static void ZPOKeretti_ShuffleIntArray(int[] arr, int size)
 {
-	for (int i = 0; i < sizeof(s_ParallelOrder) - 1; i++)
+	for (int i = 0; i < size - 1; i++)
 	{
-		int j = GetRandomInt(i, sizeof(s_ParallelOrder) - 1);
-		int temp = s_ParallelOrder[i];
-		s_ParallelOrder[i] = s_ParallelOrder[j];
-		s_ParallelOrder[j] = temp;
+		int j = GetRandomInt(i, size - 1);
+		int temp = arr[i];
+		arr[i] = arr[j];
+		arr[j] = temp;
 	}
 }
 
-void ZPOKeretti_StartParallelPhase(int which)
+static void ZPOKeretti_StartParallelPhase(int which)
 {
 	if (which == 0)
 	{
@@ -198,7 +201,7 @@ void ZPOKeretti_StartParallelPhase(int which)
 	}
 }
 
-void ZPOKeretti_AdvanceParallelPhase()
+static void ZPOKeretti_AdvanceParallelPhase()
 {
 	s_ParallelIndex++;
 
@@ -214,14 +217,12 @@ void ZPOKeretti_AdvanceParallelPhase()
 
 /**
  * Phase: 0 - MineDoor
- * Summary: Press a button to unlock a second button, which opens the
- *   door. Zombies can revert the door mid-open; re-press the
- *   second button when that happens.
+ * Summary: Open the mine door.
  * Entity: func_button / func_button / func_door
- * Bot action: USE_BUTTON
- * Confirmation: OnFullyOpen
+ * Bot action: USE_BUTTON, then USE_BUTTON
+ * Confirmation: door's OnFullyOpen output
  */
-void ZPOKeretti_ReassignMineDoorButton(const char[] output, int caller, int activator, float delay)
+static void ZPOKeretti_ReassignMineDoorButton(const char[] output, int caller, int activator, float delay)
 {
 	if (s_CurrentPhase != PHASE_MINEDOOR || s_MineDoorDone)
 	{
@@ -241,7 +242,7 @@ void ZPOKeretti_ReassignMineDoorButton(const char[] output, int caller, int acti
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 }
 
-void ZPOKeretti_OnMineDoorOpening(const char[] output, int caller, int activator, float delay)
+static void ZPOKeretti_OnMineDoorOpening(const char[] output, int caller, int activator, float delay)
 {
 	if (s_CurrentPhase != PHASE_MINEDOOR)
 	{
@@ -249,9 +250,15 @@ void ZPOKeretti_OnMineDoorOpening(const char[] output, int caller, int activator
 	}
 
 	NavBotZPSModInterface.ResetObjective();
+
+	float goal[3] = { 2052.2, -205.1, 328.0 };
+
+	CanAllBotsReachGoal(goal);
+	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 }
 
-void ZPOKeretti_OnMineDoorOpened(const char[] output, int caller, int activator, float delay)
+static void ZPOKeretti_OnMineDoorOpened(const char[] output, int caller, int activator, float delay)
 {
 	s_MineDoorDone = true;
 
@@ -260,19 +267,19 @@ void ZPOKeretti_OnMineDoorOpened(const char[] output, int caller, int activator,
 		NavBotZPSModInterface.ResetObjective();
 	}
 
-	ZPOKeretti_ShuffleParallelOrder();
+	ZPOKeretti_ShuffleIntArray(s_ParallelOrder, sizeof(s_ParallelOrder));
 	s_ParallelIndex = 0;
 	ZPOKeretti_StartParallelPhase(s_ParallelOrder[0]);
 }
 
 /**
  * Phase: 1 - WarehouseDoor
- * Summary: Press a button to start the door opening 
+ * Summary: Open the warehouse door.
  * Entity: func_button
  * Bot action: USE_BUTTON
- * Confirmation: fixed timer 
+ * Confirmation: fixed timer after the button press
  */
-void ZPOKeretti_StartWarehouseDoorPhase()
+static void ZPOKeretti_StartWarehouseDoorPhase()
 {
 	if (s_RadioDone)
 	{
@@ -302,7 +309,7 @@ void ZPOKeretti_StartWarehouseDoorPhase()
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 }
 
-void ZPOKeretti_OnWarehouseDoorButtonPressed(const char[] output, int caller, int activator, float delay)
+static void ZPOKeretti_OnWarehouseDoorButtonPressed(const char[] output, int caller, int activator, float delay)
 {
 	s_WarehouseDoorDone = true;
 
@@ -315,19 +322,19 @@ void ZPOKeretti_OnWarehouseDoorButtonPressed(const char[] output, int caller, in
 	CreateTimer(10.0, ZPOKeretti_Timer_ActivateRadio, .flags = TIMER_FLAG_NO_MAPCHANGE);
 }
 
-void ZPOKeretti_Timer_ActivateRadio(Handle timer)
+static void ZPOKeretti_Timer_ActivateRadio(Handle timer)
 {
 	ZPOKeretti_ActivateRadioButton();
 }
 
 /**
  * Phase: 2 - Radio
- * Summary: Presses a button on the radio then stay the cap zone.
+ * Summary: Call for help on the radio.
  * Entity: func_button / trigger_capturepoint_zp
  * Bot action: USE_BUTTON, then MOVETO
  * Confirmation: capture point's completion output
  */
-void ZPOKeretti_ActivateRadioButton()
+static void ZPOKeretti_ActivateRadioButton()
 {
 	if (s_RadioDone)
 	{
@@ -336,6 +343,12 @@ void ZPOKeretti_ActivateRadioButton()
 	}
 
 	s_CurrentPhase = PHASE_RADIO;
+
+	if (s_RadioButtonPressed)
+	{
+		ZPOKeretti_MoveToRadioCaptureZone();
+		return;
+	}
 
 	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "obj2_button");
 
@@ -350,25 +363,30 @@ void ZPOKeretti_ActivateRadioButton()
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 }
 
-void ZPOKeretti_OnRadioButtonPressed(const char[] output, int caller, int activator, float delay)
+static void ZPOKeretti_MoveToRadioCaptureZone()
 {
+	NavBotZPSModInterface.ResetObjective();
+
+	float goal[3] = { -2160.0, 937.0, 320.0 };
+
+	CanAllBotsReachGoal(goal);
+	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+}
+
+static void ZPOKeretti_OnRadioButtonPressed(const char[] output, int caller, int activator, float delay)
+{
+	s_RadioButtonPressed = true;
+
 	if (s_CurrentPhase != PHASE_RADIO)
 	{
 		return;
 	}
 
-	NavBotZPSModInterface.ResetObjective();
-
-	float goal[3];
-	goal[0] = -2160.0;
-	goal[1] = 937.0;
-	goal[2] = 320.0;
-
-	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+	ZPOKeretti_MoveToRadioCaptureZone();
 }
 
-void ZPOKeretti_OnRadioCaptureCompleted(const char[] output, int caller, int activator, float delay)
+static void ZPOKeretti_OnRadioCaptureCompleted(const char[] output, int caller, int activator, float delay)
 {
 	s_RadioDone = true;
 
@@ -383,12 +401,12 @@ void ZPOKeretti_OnRadioCaptureCompleted(const char[] output, int caller, int act
 
 /**
  * Phase: 3 - Files
- * Summary: Destroy each file cabinets 
+ * Summary: Destroy the company files.
  * Entity: func_breakable (x4) / math_counter
  * Bot action: DESTROY_ENTITY, repeated
  * Confirmation: counter's OnHitMax output
  */
-void ZPOKeretti_StartFilesPhase()
+static void ZPOKeretti_StartFilesPhase()
 {
 	if (s_FilesDone)
 	{
@@ -399,22 +417,11 @@ void ZPOKeretti_StartFilesPhase()
 	s_CurrentPhase = PHASE_FILES;
 	ZPOKeretti_ChatMsgSurvivors("Quick! Destroy the files now!");
 	s_FilesPhaseActive = true;
-	ZPOKeretti_ShuffleFileOrder();
+	ZPOKeretti_ShuffleIntArray(s_FileHammerIDs, sizeof(s_FileHammerIDs));
 	ZPOKeretti_UpdateFileObjective();
 }
 
-void ZPOKeretti_ShuffleFileOrder()
-{
-	for (int i = 0; i < sizeof(s_FileHammerIDs) - 1; i++)
-	{
-		int j = GetRandomInt(i, sizeof(s_FileHammerIDs) - 1);
-		int temp = s_FileHammerIDs[i];
-		s_FileHammerIDs[i] = s_FileHammerIDs[j];
-		s_FileHammerIDs[j] = temp;
-	}
-}
-
-void ZPOKeretti_UpdateFileObjective()
+static void ZPOKeretti_UpdateFileObjective()
 {
 	static int s_CurrentFileRef = INVALID_ENT_REFERENCE;
 
@@ -439,7 +446,7 @@ void ZPOKeretti_UpdateFileObjective()
 	NavBotZPSModInterface.ResetObjective();
 }
 
-void ZPOKeretti_OnFilesDestroyed(const char[] output, int caller, int activator, float delay)
+static void ZPOKeretti_OnFilesDestroyed(const char[] output, int caller, int activator, float delay)
 {
 	s_FilesPhaseActive = false;
 	s_FilesDone = true;
@@ -455,13 +462,15 @@ void ZPOKeretti_OnFilesDestroyed(const char[] output, int caller, int activator,
 
 /**
  * Phase: 4 - Finale
- * Summary: Turn a valve wheel presses a button.
+ * Summary: Turn the wheel and hit the button.
  * Entity: func_door_rotating / func_button
  * Bot action: USE_BUTTON, then USE_BUTTON
- * Confirmation: Finish, round ends
+ * Confirmation: wheel's OnFullyOpen output
  */
-void ZPOKeretti_StartFinale()
+static void ZPOKeretti_StartFinale()
 {
+	ZPOKeretti_ChatMsgSurvivors("This is it, turn the wheel and hit the button!");
+
 	int wheel = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door_rotating", "zombiecage_1_trap_1_flamejet_wheel_1");
 
 	if (wheel == INVALID_ENT_REFERENCE)
@@ -476,7 +485,7 @@ void ZPOKeretti_StartFinale()
 	HookSingleEntityOutput(wheel, "OnFullyOpen", ZPOKeretti_OnFinaleWheelOpened, true);
 }
 
-void ZPOKeretti_OnFinaleWheelOpened(const char[] output, int caller, int activator, float delay)
+static void ZPOKeretti_OnFinaleWheelOpened(const char[] output, int caller, int activator, float delay)
 {
 	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "button_fire_me");
 
@@ -492,19 +501,19 @@ void ZPOKeretti_OnFinaleWheelOpened(const char[] output, int caller, int activat
 }
 
 /**
- * Side task 
- * Summary: Unlock and open hidden door
+ * Side task (not a scored objective, runs alongside the phases above)
+ * Summary: Grab the hidden weapons and ammo.
  * Entity: func_button / func_door_rotating
- * Bot action: NAVBOT_PLUGINCMD_USE_ENTITY
+ * Bot action: NAVBOT_PLUGINCMD_USE_ENTITY, then again
  * Confirmation: polled command-running state
  */
-void ZPOKeretti_Timer_AnnounceMineDoor(Handle timer)
+static void ZPOKeretti_Timer_AnnounceMineDoor(Handle timer)
 {
 	ZPOKeretti_ChatMsgSurvivors("Let's close the mine door first");
 	ZPOKeretti_StartSideTask();
 }
 
-void ZPOKeretti_StartSideTask()
+static void ZPOKeretti_StartSideTask()
 {
 	int candidates[MAXPLAYERS + 1];
 	int count = 0;
@@ -542,7 +551,7 @@ void ZPOKeretti_StartSideTask()
 	s_SideTaskActive = true;
 }
 
-void ZPOKeretti_UpdateSideTask()
+static void ZPOKeretti_UpdateSideTask()
 {
 	int client = EntRefToEntIndex(s_SideTaskBotRef);
 
