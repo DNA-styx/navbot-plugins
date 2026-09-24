@@ -87,6 +87,10 @@ void InitObjectives()
 	{
 		ZPONoexitH2_Init();
 	}
+		else if (strcmp(map, "zpo_hoarfrost_b1_b2") == 0)
+	{
+		ZPOHoarfrostB1B2_Init();
+	}
 	else
 	{
 		LogMessage("Current map \"%s\" is not supported!", map);

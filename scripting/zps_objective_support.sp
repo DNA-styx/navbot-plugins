@@ -39,6 +39,7 @@ float g_DetectionRadius;
 #include "zps_objective_support/zpo_snowblind_v2.sp"
 #include "zps_objective_support/zpo_snowbound_dc_v3.sp"
 #include "zps_objective_support/zpo_noexit_h2.sp"
+#include "zps_objective_support/zpo_hoarfrost_b1_b2.sp"
 #include "zps_objective_support/common.sp"
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)

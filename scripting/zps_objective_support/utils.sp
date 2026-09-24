@@ -81,6 +81,11 @@ bool CanAllBotsReachGoal(const float goal[3])
 			continue;
 		}
 
+		if (GetClientTeam(client) != 2)
+		{
+			continue;
+		}
+
 		NavBot bot = NavBotManager.GetNavBotByIndex(client);
 
 		if (bot == NULL_NAVBOT)
@@ -89,7 +94,7 @@ bool CanAllBotsReachGoal(const float goal[3])
 		}
 
 		MeshNavigator nav = new MeshNavigator();
-		bool reachable = nav.ComputeToPos(bot, goal);
+		bool reachable = nav.ComputeToPos(bot, goal, 0.0, false);
 		delete nav;
 
 		if (!reachable)
