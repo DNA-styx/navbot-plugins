@@ -48,6 +48,7 @@ int FindEntityOfHammerID(int startent, const char[] classname, const int hammeri
 
 /**
  * Logs a debug message if debugging is enabled.
+ * This should not be used for warning/errors. This is for verbose logging.
  * 
  * @param format		Format parameters.
  * @param ...			Format args.
@@ -57,7 +58,12 @@ void LogDebugMessage(const char[] format, any ...)
 	if (!cvar_debug.BoolValue) { return; }
 
 	char buffer[4096];
+
+#if defined __sourcepawn2
+	FormatEx(buffer, sizeof(buffer), format, ...);
+#else
 	VFormat(buffer, sizeof(buffer), format, 2);
+#endif
 
 	LogMessage("[DEBUG] %s", buffer);
 }

@@ -11,7 +11,7 @@ public Plugin myinfo =
 	name = "ZPS NavBot Objective Support Module",
 	author = "caxanga334",
 	description = "Adds supports for objective maps.",
-	version = "1.0.1",
+	version = "1.0.2",
 	url = "https://github.com/caxanga334/navbot-plugins"
 };
 
@@ -74,6 +74,7 @@ void OnDetectionRadiusConvarChanged(ConVar convar, const char[] oldValue, const 
 {
 	g_DetectionRadius = convar.FloatValue;
 
+	// Enforce sane values
 	if (g_DetectionRadius < 256.0)
 	{
 		g_DetectionRadius = 256.0;
@@ -89,8 +90,15 @@ public void OnConfigsExecuted()
 		g_DetectionRadius = 256.0;
 	}
 
+	DetectObjectiveMap();
 	NavBotZPSModInterface.ResetObjective();
 	CreateTimer(1.0, Timer_CallThink, .flags = TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
+}
+
+public void OnMapEnd()
+{
+	// The think function timer is reset before the 
+	g_ThinkFunc = null;
 }
 
 public void OnNavBotModRoundRestart()
