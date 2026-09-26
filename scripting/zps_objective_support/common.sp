@@ -91,6 +91,10 @@ void InitObjectives()
 	{
 		ZPOHoarfrostB1B2_Init();
 	}
+		else if (strcmp(map, "zpo_shreddingfield") == 0)
+	{
+		ZPOShreddingfield_Init();
+	}
 	else
 	{
 		LogMessage("Current map \"%s\" is not supported!", map);
