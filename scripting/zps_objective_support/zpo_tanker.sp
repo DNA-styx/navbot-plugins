@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_tanker map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.31.0
+ * Module version: 0.31.3
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: {good / usable / partially complete / unusable}
@@ -22,6 +22,7 @@ static bool s_bKeypadButtonHooked;
 static bool s_bHatchButtonHooked;
 static bool s_bLifeboat1Launched;
 static bool s_bZombiesKilled;
+static int s_iRoundSerial;
 
 void ZPOTanker_Init()
 {
@@ -35,7 +36,9 @@ void ZPOTanker_Init()
 	s_bHatchButtonHooked = false;
 	s_bLifeboat1Launched = false;
 	s_bZombiesKilled = false;
+	s_iRoundSerial++;
 
+	ZPOTanker_HookHintKill();
 	ZPOTanker_ActivateInvestigate();
 }
 
@@ -380,10 +383,10 @@ static void ZPOTanker_OnHatchButtonPressed(const char[] output, int caller, int 
 
 /**
  * Phase: 8 - EscapeToBoats
- * Summary: Press lifeboat button until engine starts. Either boat's track
- *   starting to move kills all zombies, forcing them to respawn near the
- *   water.
- * Entity: func_button / path_track
+ * Summary: Press lifeboat button until engine starts. Shortly after the
+ *   first survivor touches Hint-Trigger, all zombies are killed so they
+ *   respawn at the final deck spawns.
+ * Entity: func_button / trigger_once
  * Bot action: USE_BUTTON
  * Confirmation: Button's name changing to "Zero".
  */
@@ -401,38 +404,44 @@ static void ZPOTanker_ActivateEscapeToBoats()
 		NavBotZPSModInterface.SetObjectiveUseButton(boat);
 		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 	}
-
-	int track1 = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "lifeboat1_track2");
-
-	if (track1 == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_tanker: Failed to find lifeboat1_track2!");
-	}
-	else
-	{
-		HookSingleEntityOutput(track1, "OnPass", ZPOTanker_KillZombies, true);
-	}
-
-	int track2 = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "lifeboat2_track2");
-
-	if (track2 == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_tanker: Failed to find lifeboat2_track2!");
-	}
-	else
-	{
-		HookSingleEntityOutput(track2, "OnPass", ZPOTanker_KillZombies, true);
-	}
 }
 
-static void ZPOTanker_KillZombies(const char[] output, int caller, int activator, float delay)
+// Hooked from Init() so the kill does not depend on Hatch-Button's OnPressed.
+// The .as script switches to ZS-LowerDeck-Final / ZS-UppedDeck-Final 0.5s after
+// the first survivor touches Hint-Trigger; the kill is delayed until after that.
+static void ZPOTanker_HookHintKill()
 {
-	if (s_bZombiesKilled)
+	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_once", "Hint-Trigger");
+
+	if (trigger == INVALID_ENT_REFERENCE)
 	{
+		LogError("zpo_tanker: Failed to find Hint-Trigger!");
 		return;
 	}
 
+	HookSingleEntityOutput(trigger, "OnStartTouch", ZPOTanker_OnHintTriggered, true);
+}
+
+static void ZPOTanker_OnHintTriggered(const char[] output, int caller, int activator, float delay)
+{
+	CreateTimer(2.0, ZPOTanker_Timer_KillZombies, s_iRoundSerial, TIMER_FLAG_NO_MAPCHANGE);
+}
+
+static Action ZPOTanker_Timer_KillZombies(Handle timer, int roundSerial)
+{
+	// Ignore a timer left over from a previous round.
+	if (roundSerial != s_iRoundSerial || s_bZombiesKilled)
+	{
+		return Plugin_Stop;
+	}
+
 	s_bZombiesKilled = true;
+
+	// Silence the per-player slay announcements, then restore the setting.
+	ConVar showActivity = FindConVar("sm_show_activity");
+	int oldActivity = (showActivity != null) ? showActivity.IntValue : 13;
+
+	ServerCommand("sm_show_activity 0");
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
@@ -448,6 +457,10 @@ static void ZPOTanker_KillZombies(const char[] output, int caller, int activator
 
 		ServerCommand("sm_slay #%d", GetClientUserId(i));
 	}
+
+	ServerCommand("sm_show_activity %d", oldActivity);
+
+	return Plugin_Stop;
 }
 
 static void ZPOTanker_PollLifeboat1Launch()
