@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_hoarfrost_b1_b2 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.3.1
+ * Module version: 0.3.3
  * Author: Claude.ai guided by DNA.styx
  *
  * Status:
@@ -134,7 +134,7 @@ static void ZPOHoarfrostB1B2_FindBasement()
 
 	if (trigger != INVALID_ENT_REFERENCE)
 	{
-		float goal[3] = { 492.0, 1160.0, -248.0 };
+		float goal[3] = { 2.6, 1313.1, -152.0 };
 
 		NavBotZPSModInterface.ResetObjective();
 		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
