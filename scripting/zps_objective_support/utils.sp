@@ -69,14 +69,20 @@ void LogDebugMessage(const char[] format, any ...)
 }
 
 /**
- * Checks if every active NavBot can currently path to the given position.
- * Logs (debug-gated) each bot that can't reach it.
+ * Checks if every alive survivor NavBot can path to the given position.
+ * Logs each bot once until it can reach a goal again.
+ * Call via the CanAllBotsReachGoal macro so the caller's file and line are logged.
  *
  * @param goal      World position to test.
- * @return          True if every active NavBot can reach the goal, false if at least one cannot.
+ * @param file      Caller file name.
+ * @param line      Caller line number.
+ * @return          True if every alive survivor NavBot can reach the goal, false if at least one cannot.
  */
+static bool s_bUnreachableLogged[MAXPLAYERS + 1];
 
-bool CanAllBotsReachGoal(const float goal[3])
+#define CanAllBotsReachGoal(%1) CanAllBotsReachGoalAt(%1, __FILE_NAME__, __LINE__)
+
+bool CanAllBotsReachGoalAt(const float goal[3], const char[] file, int line)
 {
 	bool allReachable = true;
 
@@ -87,7 +93,7 @@ bool CanAllBotsReachGoal(const float goal[3])
 			continue;
 		}
 
-		if (GetClientTeam(client) != 2)
+		if (GetClientTeam(client) != 2 || !IsPlayerAlive(client))
 		{
 			continue;
 		}
@@ -103,10 +109,21 @@ bool CanAllBotsReachGoal(const float goal[3])
 		bool reachable = nav.ComputeToPos(bot, goal, 0.0, false);
 		delete nav;
 
-		if (!reachable)
+		if (reachable)
 		{
-			allReachable = false;
-			LogDebugMessage("MOVETO goal unreachable for bot \"%N\" (client %i). Goal: %.1f %.1f %.1f", client, client, goal[0], goal[1], goal[2]);
+			s_bUnreachableLogged[client] = false;
+			continue;
+		}
+
+		allReachable = false;
+
+		if (!s_bUnreachableLogged[client])
+		{
+			s_bUnreachableLogged[client] = true;
+
+			float pos[3];
+			GetClientAbsOrigin(client, pos);
+			LogError("MOVETO goal unreachable for bot \"%N\" (client %i) at %s:%i. Bot: %.1f %.1f %.1f Goal: %.1f %.1f %.1f", client, client, file, line, pos[0], pos[1], pos[2], goal[0], goal[1], goal[2]);
 		}
 	}
 

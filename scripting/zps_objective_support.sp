@@ -11,7 +11,7 @@ public Plugin myinfo =
 	name = "ZPS NavBot Objective Support Module",
 	author = "caxanga334",
 	description = "Adds supports for objective maps.",
-	version = "1.0.3",
+	version = "1.0.6",
 	url = "https://github.com/caxanga334/navbot-plugins"
 };
 
