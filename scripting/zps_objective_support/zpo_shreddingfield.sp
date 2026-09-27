@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_shreddingfield map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.2.6
+ * Module version: 0.2.8
  * Author: Claude.ai guided by DNA.styx
  *
  * Status:
@@ -43,7 +43,7 @@ void ZPOShreddingfield_Init()
 	s_bAtBlockade = false;
 	s_bLeg2Started = false;
 
-	int barrel = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "prop_physics_override", 2846015);
+	int barrel = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "prop_physics", 2846015);
 
 	if (barrel == INVALID_ENT_REFERENCE)
 	{
@@ -501,7 +501,7 @@ static void ZPOShreddingfield_TargetNextItem()
 
 /**
  * Phase: 4 - ParkinglotDefend
- * Summary: Hold near the capture point until the cart push unlocks.
+ * Summary: Hold the defend position until the cart push unlocks.
  * Entity: trigger_multiple
  * Bot action: MOVETO
  * Confirmation: the push trigger becomes enabled (polled)
@@ -510,7 +510,7 @@ static void ZPOShreddingfield_ActivateParkinglotDefend()
 {
 	ZPOShreddingfield_ChatMsgSurvivors("Hold this position!");
 
-	float goal[3] = { 2253.9, -3538.5, -478.5 };
+	float goal[3] = { 2247.7, -3018.0, -432.0 };
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
@@ -626,7 +626,7 @@ static void ZPOShreddingfield_OnBarrelsArmed(const char[] output, int caller, in
 /**
  * Phase: 6.2 - Destroy Blockade
  * Summary: Shoot the blockade barrel.
- * Entity: prop_physics_override
+ * Entity: prop_physics
  * Bot action: DESTROY_ENTITY
  * Confirmation: the barrel breaks (hooked in Init)
  */
@@ -640,7 +640,7 @@ static void ZPOShreddingfield_ActivateDestroyBlockade()
 
 	ZPOShreddingfield_ChatMsgSurvivors("Blow up the barricade!");
 
-	int barrel = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "prop_physics_override", 2846015);
+	int barrel = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "prop_physics", 2846015);
 
 	if (barrel == INVALID_ENT_REFERENCE)
 	{
@@ -761,7 +761,7 @@ static void ZPOShreddingfield_ActivateCartPushLeg3(const char[] output, int call
 /**
  * Phase: 10 - Elevator
  * Summary: Call the freight elevator.
- * Entity: prop_dynamic_override
+ * Entity: func_button
  * Bot action: USE_BUTTON
  * Confirmation: the button is pressed
  */
@@ -770,11 +770,11 @@ static void ZPOShreddingfield_ActivateElevator(const char[] output, int caller, 
 	s_bCartPushActive = false;
 	ZPOShreddingfield_ChatMsgSurvivors("Call the elevator!");
 
-	int button = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "prop_dynamic_override", 3375101);
+	int button = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", 3377199);
 
 	if (button == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_shreddingfield: Failed to find eb! Hammer ID: 3375101");
+		LogError("zpo_shreddingfield: Failed to find eb! Hammer ID: 3377199");
 		return;
 	}
 
