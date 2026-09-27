@@ -4,12 +4,12 @@
  * NavBot ZPS objective support module for the zpo_noexit_h2 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.3.2
+ * Module version: 0.3.4
  * Author: Claude.ai guided by DNA.styx
  *
- * Status: WIP
+ * Status:
  *
- * Issues: Players needed to get Office Keys
+ * Issues:
  */
 
 // Only Init() and Think() are called from outside this file. Every other
@@ -197,9 +197,9 @@ static void ZPONoexitH2_OnKeysTaken(const char[] output, int caller, int activat
 
 /**
  * Phase: 4 - Use keys
- * Summary: Use the keys on the office door.
+ * Summary: Hold at the office door until the keys are used.
  * Entity: trigger_useable
- * Bot action: USE_ITEM
+ * Bot action: MOVETO
  * Confirmation: The keys are used.
  */
 static void ZPONoexitH2_UseKeys()
@@ -210,11 +210,11 @@ static void ZPONoexitH2_UseKeys()
 
 	if (lock != INVALID_ENT_REFERENCE)
 	{
+		float goal[3] = { 1478.0, -1332.6, -1216.0 };
 		NavBotZPSModInterface.ResetObjective();
-		NavBotZPSModInterface.SetObjectiveItemSearchID("keys");
-		NavBotZPSModInterface.SetObjectiveItemUseTarget(lock);
-		NavBotZPSModInterface.SetObjectiveDetectionRadius(999999.0);
-		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_ITEM);
+		CanAllBotsReachGoal(goal);
+		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 		HookSingleEntityOutput(lock, "OnUsed", ZPONoexitH2_OnKeysUsed, true);
 	}
 	else
@@ -298,7 +298,7 @@ static void ZPONoexitH2_OnKeycardUsed(const char[] output, int caller, int activ
  * Summary: Hold in the lab until the airlock opens.
  * Entity: func_door
  * Bot action: MOVETO
- * Confirmation: The airlock doors are fully open.
+ * Confirmation: The airlock doors start to open.
  */
 static void ZPONoexitH2_GuardLab()
 {
@@ -313,7 +313,7 @@ static void ZPONoexitH2_GuardLab()
 		CanAllBotsReachGoal(goal);
 		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-		HookSingleEntityOutput(airlock, "OnFullyOpen", ZPONoexitH2_OnAirlockOpened, true);
+		HookSingleEntityOutput(airlock, "OnOpen", ZPONoexitH2_OnAirlockOpened, true);
 	}
 	else
 	{
