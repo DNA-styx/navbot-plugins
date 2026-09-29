@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_shreddingfield map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.2.8
+ * Module version: 0.2.9
  * Author: Claude.ai guided by DNA.styx
  *
  * Status:
@@ -608,7 +608,7 @@ static void ZPOShreddingfield_ActivateArmBarrels()
 		return;
 	}
 
-	float goal[3] = { 3475.0, -3514.0, -410.0 };
+	float goal[3] = { 3463.7, -3559.8, -403.0 };
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
