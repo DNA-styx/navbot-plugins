@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_harvest map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.32.0
+ * Module version: 0.32.2
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: Usable
@@ -203,13 +203,9 @@ static void ZPOHarvest_OnFusePlanted(const char[] output, int caller, int activa
 	}
 }
 
-/**
- * Phase: 5 - Move Down The Tunnel
- * Summary: Move through the tunnel opened by the blast.
- * Entity: trigger_once
- * Bot action: MOVETO tunnel end
- * Confirmation: the tunnel trigger's OnTrigger output
- */
+// Obj_BombDetonate() (the map's AngelScript) doesn't remove the survivor-only
+// tunnel clip (humanclip_added1) until 3.0s after C4Relay fires, so the MOVETO
+// goal below is set on a 3.5s delay to give that clip time to clear.
 static void ZPOHarvest_OnBombDetonated(const char[] output, int caller, int activator, float delay)
 {
 	ZPOHarvest_ChatMsgSurvivors("Blast went off, let's move through the tunnel!");
@@ -218,20 +214,34 @@ static void ZPOHarvest_OnBombDetonated(const char[] output, int caller, int acti
 
 	if (trigger != INVALID_ENT_REFERENCE)
 	{
-		NavBotZPSModInterface.ResetObjective();
-
-		float goal[3] = { 2395.9, 395.7, -597.0 };
-
-		CanAllBotsReachGoal(goal);
-		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-
 		HookSingleEntityOutput(trigger, "OnTrigger", ZPOHarvest_OnBarnReached, true);
+
+		CreateTimer(3.5, ZPOHarvest_MoveToTunnel, _, TIMER_FLAG_NO_MAPCHANGE);
 	}
 	else
 	{
 		LogError("zpo_harvest: Failed to find genobj_powerout!");
 	}
+}
+
+/**
+ * Phase: 5 - Move Down The Tunnel
+ * Summary: Move through the tunnel opened by the blast.
+ * Entity: trigger_once
+ * Bot action: MOVETO tunnel end
+ * Confirmation: the tunnel trigger's OnTrigger output
+ */
+static Action ZPOHarvest_MoveToTunnel(Handle timer)
+{
+	NavBotZPSModInterface.ResetObjective();
+
+	float goal[3] = { 2323.7, 567.9, -597.0 };
+
+	CanAllBotsReachGoal(goal);
+	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+
+	return Plugin_Stop;
 }
 
 /**
