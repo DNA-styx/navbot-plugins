@@ -4,12 +4,12 @@
  * NavBot ZPS objective support module for the zpo_snowbound_dc_v3 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.3.0
+ * Module version: 0.4.0
  * Author: Claude.ai guided by DNA.styx
  *
- * Status: WIP: up to the bots using the cable car
+ * Status: {good / usable / partially complete / unusable}
  *
- * Issues: Needs custom navmesh to stop bots leaving buildings
+ * Issues: {description of things that do not work, or "none known"}
  */
 
 // Only Init() and Think() are called from outside this file.
@@ -78,7 +78,7 @@ static void ZPOSnowboundDCv3_ActivateRadio(const char[] output, int caller, int 
 		return;
 	}
 
-	HookSingleEntityOutput(filterradio, "OnPass", ZPOSnowboundDCv3_ActivateHoldPosition, true);
+	HookSingleEntityOutput(filterradio, "OnPass", ZPOSnowboundDCv3_ActivateFindWood, true);
 
 	const int radioButtonHammerid = 160402;
 	int radioButton = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", radioButtonHammerid);
@@ -95,7 +95,60 @@ static void ZPOSnowboundDCv3_ActivateRadio(const char[] output, int caller, int 
 }
 
 /**
- * Phase: 2 - Guard the hunt
+ * Phase: 2 - FindWood
+ * Summary: Search for and pick up item_wood.
+ * Entity: item_deliver
+ * Bot action: FIND_ITEM
+ * Confirmation: item_wood fires OnItemTaken.
+ */
+static void ZPOSnowboundDCv3_ActivateFindWood(const char[] output, int caller, int activator, float delay)
+{
+	const int itemWoodHammerid = 651120;
+	int itemWood = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "item_deliver", itemWoodHammerid);
+
+	if (itemWood == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_snowbound_dc_v3: Failed to find item_wood! Hammer ID: %i", itemWoodHammerid);
+		return;
+	}
+
+	HookSingleEntityOutput(itemWood, "OnItemTaken", ZPOSnowboundDCv3_ActivateDeliverWood, true);
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveItemSearchID("item_wood");
+	NavBotZPSModInterface.SetObjectiveDetectionRadius(g_DetectionRadius);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_FIND_ITEM);
+}
+
+/**
+ * Phase: 3 - DeliverWood
+ * Summary: Carry item_wood to the fireplace and drop it.
+ * Entity: trigger_itemreceiver
+ * Bot action: DROP_ITEM
+ * Confirmation: fireplace_item_reciever fires OnItemDelivered.
+ */
+static void ZPOSnowboundDCv3_ActivateDeliverWood(const char[] output, int caller, int activator, float delay)
+{
+	const int fireplaceReceiverHammerid = 651252;
+	int fireplaceReceiver = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "trigger_itemreceiver", fireplaceReceiverHammerid);
+
+	if (fireplaceReceiver == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_snowbound_dc_v3: Failed to find fireplace_item_reciever! Hammer ID: %i", fireplaceReceiverHammerid);
+		return;
+	}
+
+	HookSingleEntityOutput(fireplaceReceiver, "OnItemDelivered", ZPOSnowboundDCv3_ActivateHoldPosition, true);
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveItemSearchID("item_wood");
+	NavBotZPSModInterface.SetObjectiveItemUseTarget(fireplaceReceiver);
+	NavBotZPSModInterface.SetObjectiveDetectionRadius(g_DetectionRadius);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_DROP_ITEM);
+}
+
+/**
+ * Phase: 4 - Guard the hunt
  * Summary: Bots move to and hold a position while the radio message sends.
  * Entity: math_counter
  * Bot action: MOVETO
@@ -122,7 +175,7 @@ static void ZPOSnowboundDCv3_ActivateHoldPosition(const char[] output, int calle
 }
 
 /**
- * Phase: 3 - ApproachLever
+ * Phase: 5 - ApproachLever
  * Summary: Bots move to the tram_timer_tr zone to force-spawn the CAR1 lever.
  * Entity: point_template
  * Bot action: MOVETO
@@ -149,7 +202,7 @@ static void ZPOSnowboundDCv3_ActivateLever(const char[] output, int caller, int 
 }
 
 /**
- * Phase: 4 - UseLever
+ * Phase: 6 - UseLever
  * Summary: Bots pull the CAR1 lever to send the cable car down.
  * Entity: func_rot_button
  * Bot action: USE_BUTTON
@@ -183,7 +236,7 @@ static void ZPOSnowboundDCv3_ActivateUseLever(const char[] output, int caller, i
 }
 
 /**
- * Phase: 5 - Travel
+ * Phase: 7 - Travel
  * Summary: Bots move to and hold a position while the cable car descends.
  * Entity: path_track
  * Bot action: MOVETO
