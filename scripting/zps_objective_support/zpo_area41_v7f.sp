@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_area41_v7f map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.4.1
+ * Module version: 0.5.2
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: Partially complete
@@ -12,12 +12,9 @@
  * Issues: In testing
  */
 
-static bool s_ToiletFlush;
-
 void ZPOArea41V7F_Init()
 {
 	g_ThinkFunc = ZPOArea41V7F_Think;
-	s_ToiletFlush = false;
 
 	int pathTrack = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "Path_Chinook5");
 
@@ -38,63 +35,13 @@ void ZPOArea41V7F_Think()
 
 /**
  * Phase: 0 - ChinookExit
- * Summary: Moves bots off the Chinook as it passes the exit path point.
- * Entity: path_track
- * Bot action: MOVETO fixed position
+ * Summary: Sends bots to press the flush button once they exit the Chinook.
+ * Entity: path_track, func_button
+ * Bot action: USE_BUTTON
  * Confirmation: Path_Chinook5's OnPass
  */
 static void ZPOArea41V7F_OnChinookExit(const char[] output, int caller, int activator, float delay)
 {
-	float goal[3] = { 771.0, -7320.0, 84.0 };
-
-	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-
-	int counter = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "math_counter", "MathSurf1");
-
-	if (counter == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_area41_v7f: Failed to find MathSurf1 math_counter!");
-	}
-	else
-	{
-		HookSingleEntityOutput(counter, "OnHitMax", ZPOArea41V7F_OnToiletDoorUnlocked, true);
-	}
-}
-
-/**
- * Phase: 1 - ToiletDoorUnlocked
- * Summary: Announces the door, then forces the flush button objective if it hasn't been pressed within 30 seconds.
- * Entity: math_counter, func_button
- * Bot action: USE_BUTTON (fallback only)
- * Confirmation: MathSurf1's OnHitMax; 30s timeout checks the button's press state
- */
-static void ZPOArea41V7F_OnToiletDoorUnlocked(const char[] output, int caller, int activator, float delay)
-{
-	NavBotZPSModInterface.ResetObjective();
-
-	PrintToChatAll("\x04[NAV]\x01 There's a floater! Flush it!");
-	CreateTimer(30.0, ZPOArea41V7F_OnFlushTimeout, .flags = TIMER_FLAG_NO_MAPCHANGE);
-
-	int button = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", 730833);
-
-	if (button == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_area41_v7f: Failed to find flush func_button! Hammer ID: 730833");
-	}
-	else
-	{
-		HookSingleEntityOutput(button, "OnPressed", ZPOArea41V7F_OnFlushButtonPressed, true);
-	}
-}
-
-static void ZPOArea41V7F_OnFlushTimeout(Handle timer)
-{
-	if (s_ToiletFlush)
-	{
-		return;
-	}
-
 	int button = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", 730833);
 
 	if (button == INVALID_ENT_REFERENCE)
@@ -103,13 +50,14 @@ static void ZPOArea41V7F_OnFlushTimeout(Handle timer)
 		return;
 	}
 
-	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveUseButton(button);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
+
+	HookSingleEntityOutput(button, "OnPressed", ZPOArea41V7F_OnFlushButtonPressed, true);
 }
 
 /**
- * Phase: 2 - FlushButtonPressed
+ * Phase: 1 - FlushButtonPressed
  * Summary: Moves bots to the elevator shaft once the flush button is pressed.
  * Entity: func_button
  * Bot action: MOVETO fixed position
@@ -117,13 +65,12 @@ static void ZPOArea41V7F_OnFlushTimeout(Handle timer)
  */
 static void ZPOArea41V7F_OnFlushButtonPressed(const char[] output, int caller, int activator, float delay)
 {
-	s_ToiletFlush = true;
-
 	float goal[3] = { 778.7, -7615.8, 84.0 };
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+	CanAllBotsReachGoal(goal);
 
 	int elevatorTop = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "Path_ElevatorA3");
 
@@ -138,7 +85,7 @@ static void ZPOArea41V7F_OnFlushButtonPressed(const char[] output, int caller, i
 }
 
 /**
- * Phase: 3 - ElevatorAtTop
+ * Phase: 2 - ElevatorAtTop
  * Summary: Moves bots onto the lift once it arrives at the top of its path.
  * Entity: path_track
  * Bot action: MOVETO fixed position
@@ -151,6 +98,7 @@ static void ZPOArea41V7F_OnElevatorAtTop(const char[] output, int caller, int ac
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+	CanAllBotsReachGoal(goal);
 
 	int elevatorBottom = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "Path_ElevatorA1");
 
@@ -165,11 +113,11 @@ static void ZPOArea41V7F_OnElevatorAtTop(const char[] output, int caller, int ac
 }
 
 /**
- * Phase: 4 - ElevatorAtBottom
+ * Phase: 3 - ElevatorAtBottom
  * Summary: Sends bots to press the tunnel door button once the lift reaches the bottom.
  * Entity: path_track, func_button
  * Bot action: USE_BUTTON
- * Confirmation: Path_ElevatorA1's OnPass
+ * Confirmation: Path_ElevatorA1's OnPass; hooks the tunnel door's OnOpen
  */
 static void ZPOArea41V7F_OnElevatorAtBottom(const char[] output, int caller, int activator, float delay)
 {
@@ -185,18 +133,6 @@ static void ZPOArea41V7F_OnElevatorAtBottom(const char[] output, int caller, int
 	NavBotZPSModInterface.SetObjectiveUseButton(button);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 
-	HookSingleEntityOutput(button, "OnPressed", ZPOArea41V7F_OnTunnelDoorButtonPressed, true);
-}
-
-/**
- * Phase: 5 - TunnelDoorButtonPressed
- * Summary: Waits for the tunnel door to open before the hacking button becomes reachable.
- * Entity: func_button
- * Bot action: none (waits on the door)
- * Confirmation: tunnel door button's OnPressed
- */
-static void ZPOArea41V7F_OnTunnelDoorButtonPressed(const char[] output, int caller, int activator, float delay)
-{
 	int door = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_door", 734632);
 
 	if (door == INVALID_ENT_REFERENCE)
@@ -209,7 +145,7 @@ static void ZPOArea41V7F_OnTunnelDoorButtonPressed(const char[] output, int call
 }
 
 /**
- * Phase: 6 - TunnelDoorOpen
+ * Phase: 4 - TunnelDoorOpen
  * Summary: Sends bots to press the hacking button once the tunnel door opens.
  * Entity: func_door, func_button
  * Bot action: USE_BUTTON
@@ -233,7 +169,7 @@ static void ZPOArea41V7F_OnTunnelDoorOpen(const char[] output, int caller, int a
 }
 
 /**
- * Phase: 7 - Bt1OPressed
+ * Phase: 5 - Bt1OPressed
  * Summary: Moves bots on once the hacking button is pressed.
  * Entity: func_button
  * Bot action: MOVETO fixed position
@@ -246,6 +182,7 @@ static void ZPOArea41V7F_OnBt1OPressed(const char[] output, int caller, int acti
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+	CanAllBotsReachGoal(goal);
 
 	int captureTrigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_capturepoint_zp", "HackingTrigger1");
 
@@ -260,7 +197,7 @@ static void ZPOArea41V7F_OnBt1OPressed(const char[] output, int caller, int acti
 }
 
 /**
- * Phase: 8 - HackingComplete
+ * Phase: 6 - HackingComplete
  * Summary: Moves bots on once the hacking capture point is taken and the tunnel door opens.
  * Entity: trigger_capturepoint_zp
  * Bot action: MOVETO fixed position
@@ -273,4 +210,5 @@ static void ZPOArea41V7F_OnHackingComplete(const char[] output, int caller, int 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+	CanAllBotsReachGoal(goal);
 }
