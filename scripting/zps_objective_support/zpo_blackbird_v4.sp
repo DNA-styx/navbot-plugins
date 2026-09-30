@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_blackbird_v4 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.2.4
+ * Module version: 0.2.8
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: {good / usable / partially complete / unusable}
@@ -33,10 +33,10 @@ void ZPOBlackbird_Think()
 
 /**
  * Phase: 0 - Get inside the club
- * Summary: Bot moves to the club entrance.
- * Entity: trigger_multiple, logic_case
- * Bot action: MOVETO
- * Confirmation: filEntrance's OnPass.
+ * Summary: Wait for the entry route to be picked.
+ * Entity: logic_case, func_button
+ * Bot action: USE_BUTTON (garage route only)
+ * Confirmation: paths's OnCase02, or filGarageDoor's OnPass.
  */
 static void ZPOBlackbird_ActivateGetInside()
 {
@@ -49,25 +49,10 @@ static void ZPOBlackbird_ActivateGetInside()
 	}
 
 	HookSingleEntityOutput(paths, "OnCase01", ZPOBlackbird_OnGarageRouteActive, true);
-
-	float goal[3] = { 223.0, 484.6, 108.0 };
-
-	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-
-	int entrance = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "filter_activator_team", "filEntrance");
-
-	if (entrance == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_blackbird_v4: Failed to find filEntrance filter_activator_team!");
-		return;
-	}
-
-	HookSingleEntityOutput(entrance, "OnPass", ZPOBlackbird_OnGetInsideComplete, true);
+	HookSingleEntityOutput(paths, "OnCase02", ZPOBlackbird_ActivatePowerOn, true);
 }
 
-// Phase 0 garage sub-task.
+// Garage route: open the garage door.
 static void ZPOBlackbird_OnGarageRouteActive(const char[] output, int caller, int activator, float delay)
 {
 	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "garagedoor_button");
@@ -90,23 +75,7 @@ static void ZPOBlackbird_OnGarageRouteActive(const char[] output, int caller, in
 		return;
 	}
 
-	HookSingleEntityOutput(filter, "OnPass", ZPOBlackbird_OnGarageDoorOpened, true);
-}
-
-// Confirms the garage sub-task.
-static void ZPOBlackbird_OnGarageDoorOpened(const char[] output, int caller, int activator, float delay)
-{
-	float goal[3] = { 223.0, 484.6, 108.0 };
-
-	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-}
-
-// Confirms Phase 0.
-static void ZPOBlackbird_OnGetInsideComplete(const char[] output, int caller, int activator, float delay)
-{
-	ZPOBlackbird_ActivatePowerOn();
+	HookSingleEntityOutput(filter, "OnPass", ZPOBlackbird_ActivatePowerOn, true);
 }
 
 /**
@@ -116,7 +85,7 @@ static void ZPOBlackbird_OnGetInsideComplete(const char[] output, int caller, in
  * Bot action: USE_BUTTON
  * Confirmation: filPwr's OnPass.
  */
-static void ZPOBlackbird_ActivatePowerOn()
+static void ZPOBlackbird_ActivatePowerOn(const char[] output, int caller, int activator, float delay)
 {
 	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "club_pwr");
 
@@ -187,10 +156,10 @@ static void ZPOBlackbird_ActivateMusicOff()
 	HookSingleEntityOutput(filter, "OnPass", ZPOBlackbird_OnMusicOff, true);
 }
 
-// Confirms Phase 2.
+// transmitter_door unlocks 4s after filMusic's OnPass.
 static void ZPOBlackbird_OnMusicOff(const char[] output, int caller, int activator, float delay)
 {
-	ZPOBlackbird_ActivateCheckTransmitter();
+	CreateTimer(4.0, ZPOBlackbird_ActivateCheckTransmitter, _, TIMER_FLAG_NO_MAPCHANGE);
 }
 
 /**
@@ -200,9 +169,9 @@ static void ZPOBlackbird_OnMusicOff(const char[] output, int caller, int activat
  * Bot action: MOVETO
  * Confirmation: filTransmitter's OnPass.
  */
-static void ZPOBlackbird_ActivateCheckTransmitter()
+static Action ZPOBlackbird_ActivateCheckTransmitter(Handle timer)
 {
-	float goal[3] = { -266.0, 620.0, 387.5 };
+	float goal[3] = { -260.5, 666.8, 400.0 };
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
@@ -213,16 +182,11 @@ static void ZPOBlackbird_ActivateCheckTransmitter()
 	if (filter == INVALID_ENT_REFERENCE)
 	{
 		LogError("zpo_blackbird_v4: Failed to find filTransmitter filter_activator_team!");
-		return;
+		return Plugin_Stop;
 	}
 
-	HookSingleEntityOutput(filter, "OnPass", ZPOBlackbird_OnTransmitterChecked, true);
-}
-
-// Confirms Phase 3.
-static void ZPOBlackbird_OnTransmitterChecked(const char[] output, int caller, int activator, float delay)
-{
-	ZPOBlackbird_ActivateFindParts();
+	HookSingleEntityOutput(filter, "OnPass", ZPOBlackbird_ActivateFindParts, true);
+	return Plugin_Stop;
 }
 
 /**
@@ -232,7 +196,7 @@ static void ZPOBlackbird_OnTransmitterChecked(const char[] output, int caller, i
  * Bot action: USE_BUTTON
  * Confirmation: filPartGet's OnPass.
  */
-static void ZPOBlackbird_ActivateFindParts()
+static void ZPOBlackbird_ActivateFindParts(const char[] output, int caller, int activator, float delay)
 {
 	int partTele = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "logic_case", "partTele");
 
@@ -340,7 +304,7 @@ static void ZPOBlackbird_OnRepairStarted(const char[] output, int caller, int ac
 		return;
 	}
 
-	HookSingleEntityOutput(timer, "OnTimer", ZPOBlackbird_OnRepairComplete, true);
+	HookSingleEntityOutput(timer, "OnTimer", ZPOBlackbird_ActivateDestroyDoor, true);
 
 	int hold = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "repairChk");
 
@@ -359,14 +323,8 @@ static void ZPOBlackbird_OnRepairInterrupted(const char[] output, int caller, in
 	ZPOBlackbird_ActivateRepairTransmitter();
 }
 
-// Confirms Phase 5.
-static void ZPOBlackbird_OnRepairComplete(const char[] output, int caller, int activator, float delay)
-{
-	ZPOBlackbird_ActivateDestroyDoor();
-}
-
 // Phase 6 prerequisite - door blocking the radio button.
-static void ZPOBlackbird_ActivateDestroyDoor()
+static void ZPOBlackbird_ActivateDestroyDoor(const char[] output, int caller, int activator, float delay)
 {
 	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "prop_door_rotating", "doordmgblock");
 
@@ -424,6 +382,5 @@ static void ZPOBlackbird_ActivateCallForHelp()
 // Confirms Phase 6.
 static void ZPOBlackbird_OnHelpCalled(const char[] output, int caller, int activator, float delay)
 {
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_NONE);
 	NavBotZPSModInterface.ResetObjective();
 }
