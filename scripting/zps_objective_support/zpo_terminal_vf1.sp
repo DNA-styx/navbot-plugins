@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_terminal_vf1 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.6.1
+ * Module version: 0.6.2
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: WIP. Search for and use Keycard. Find food. Find and guard Bus 
@@ -26,7 +26,6 @@ static int s_FoodButtons[6];
 static int s_FoodIndex;
 static int s_FoodAreaTotal[3];
 static int s_FoodAreaCount[3];
-static int s_MainTerminal = INVALID_ENT_REFERENCE;
 
 // hammerid[6] per case_food outcome.
 static int s_FoodCaseButtons[5][6] =
@@ -171,7 +170,6 @@ void ZPOTerminal_HookMainTerminal()
 		return;
 	}
 
-	s_MainTerminal = EntIndexToEntRef(entity);
 	HookSingleEntityOutput(entity, "OnHumanCaptureCompleted", ZPOTerminal_OnMainTerminalCaptured, true);
 }
 
@@ -601,23 +599,16 @@ void ZPOTerminal_OnFoodItemTaken(const char[] output, int caller, int activator,
  * Phase: 6 - CaptureMainTerminal
  * Summary: Capture the main terminal zone to select a bus.
  * Entity: trigger_capturepoint_zp "mainterminal_capture" (482536)
- * Bot action: MOVETO zone origin
+ * Bot action: MOVETO position inside the zone
  * Confirmation: mainterminal_capture's OnHumanCaptureCompleted
  */
 void ZPOTerminal_MoveToMainTerminal()
 {
-	int entity = EntRefToEntIndex(s_MainTerminal);
-
-	if (entity == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_terminal_vf1: mainterminal_capture is gone!");
-		return;
-	}
-
-	float goal[3];
-	GetEntPropVector(entity, Prop_Data, "m_vecOrigin", goal);
-
 	NavBotZPSModInterface.ResetObjective();
+
+	float goal[3] = { 2.5, -364.2, -768.0 };
+
+	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 }
@@ -626,6 +617,6 @@ void ZPOTerminal_MoveToMainTerminal()
 // implemented - bots fall back to following the nearest player.
 void ZPOTerminal_OnMainTerminalCaptured(const char[] output, int caller, int activator, float delay)
 {
-	ZPOTerminal_ChatMsgSurvivors("We've captured the bus");
+	ZPOTerminal_ChatMsgSurvivors("We've captured the terminal");
 	NavBotZPSModInterface.ResetObjective();
 }
