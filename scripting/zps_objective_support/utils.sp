@@ -1,4 +1,7 @@
 
+#pragma newdecls required
+#pragma semicolon 1
+
 void HookNamedOutputOfAllEntities(const char[] classname, const char[] output, EntityOutput callback, bool once = false)
 {
 	int entity = INVALID_ENT_REFERENCE;

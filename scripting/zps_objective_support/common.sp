@@ -1,4 +1,7 @@
 
+#pragma newdecls required
+#pragma semicolon 1
+
 // Each objective map gets a unique value here for the switch statement
 enum ZPOMap
 {
@@ -11,7 +14,7 @@ static ZPOMap s_detectedMap = MAP_UNKNOWN;
 // Detects if the current map is an objective map.
 void DetectObjectiveMap()
 {
-	s_detectedMap = MAP_UNKNOWN
+	s_detectedMap = MAP_UNKNOWN;
 
 	char map[128];
 	GetCurrentMap(map, sizeof(map));
