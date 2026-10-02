@@ -1,4 +1,7 @@
 
+#pragma newdecls required
+#pragma semicolon 1
+
 // Each objective map gets a unique value here for the switch statement
 enum ZPOMap
 {

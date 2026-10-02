@@ -1,4 +1,7 @@
 
+#pragma newdecls required
+#pragma semicolon 1
+
 static bool s_FoundKeys;
 static bool s_LabChamberPressed;
 static bool s_LabDoorHacked;
