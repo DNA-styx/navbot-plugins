@@ -4,12 +4,12 @@
  * NavBot ZPS objective support module for the zpo_abandoned_base_r2 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.2.5
+ * Module version: 0.3.1
  * Author: Claude.ai guided by DNA.styx
  *
- * Status: WIP - Up to Control Room button
+ * Status:
  *
- * Issues: None
+ * Issues:
  */
 
 void ZPOAbandonedBaseR2_Init()
@@ -134,24 +134,15 @@ static void ZPOAbandonedBaseR2_OnMainDoorOpened(const char[] output, int caller,
 }
 
 /**
- * Phase: 5 - Wait for armory door and timer
- * Summary: Bot idles while the armory door opens and the green room timer runs.
- * Entity: func_door
+ * Phase: 5 - Wait for green room timer
+ * Summary: Bot idles until the green room timer elapses.
+ * Entity: none
  * Bot action: none
- * Confirmation: Armory door fully open, or 66s timer elapsed.
+ * Confirmation: 66s timer elapsed.
  */
 static void ZPOAbandonedBaseR2_OnSecurityButtonPressed(const char[] output, int caller, int activator, float delay)
 {
-	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door", "Port?o Sala de Armas");
-
-	if (door == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_abandoned_base_r2: Failed to find Port?o Sala de Armas func_door!");
-		return;
-	}
-
 	NavBotZPSModInterface.ResetObjective();
-	HookSingleEntityOutput(door, "OnFullyOpen", ZPOAbandonedBaseR2_OnArmoryDoorOpened, true);
 
 	// triggerlockeddoor is enabled by this same button press, 66s delay.
 	// There is no native to hook an entity input, so a timer bridges the gap.
@@ -159,23 +150,7 @@ static void ZPOAbandonedBaseR2_OnSecurityButtonPressed(const char[] output, int 
 }
 
 /**
- * Phase: 6 - Move to armory
- * Summary: Bot moves to the armory.
- * Entity: func_door
- * Bot action: MOVETO fixed position
- * Confirmation: none (superseded by Phase 7's timer)
- */
-static void ZPOAbandonedBaseR2_OnArmoryDoorOpened(const char[] output, int caller, int activator, float delay)
-{
-	float goal[3] = { 1506.9, 6765.7, 89.0 };
-
-	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-}
-
-/**
- * Phase: 7 - Move to green room trigger
+ * Phase: 6 - Move to green room trigger
  * Summary: Bot moves to the green room trigger.
  * Entity: trigger_once
  * Bot action: MOVETO trigger origin
@@ -196,12 +171,13 @@ static void ZPOAbandonedBaseR2_OnGreenRoomTriggerEnabled(Handle timer)
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 	HookSingleEntityOutput(trigger, "OnTrigger", ZPOAbandonedBaseR2_OnGreenRoomReached, true);
 }
 
 /**
- * Phase: 8 - Break basement wood
+ * Phase: 7 - Break basement wood
  * Summary: Bot destroys the wooden board blocking the basement.
  * Entity: func_breakable
  * Bot action: DESTROY_ENTITY
@@ -224,7 +200,7 @@ static void ZPOAbandonedBaseR2_OnGreenRoomReached(const char[] output, int calle
 }
 
 /**
- * Phase: 9 - Press elevator button
+ * Phase: 8 - Press elevator button
  * Summary: Bot presses the elevator call button.
  * Entity: func_button
  * Bot action: USE_BUTTON
@@ -247,7 +223,7 @@ static void ZPOAbandonedBaseR2_OnBasementWoodBroken(const char[] output, int cal
 }
 
 /**
- * Phase: 10 - Break vent cover
+ * Phase: 9 - Break vent cover
  * Summary: Bot destroys the Metal Porao vent cover (the 1hp breakable behind it breaks with it).
  * Entity: func_breakable
  * Bot action: DESTROY_ENTITY
@@ -270,7 +246,7 @@ static void ZPOAbandonedBaseR2_OnElevatorButtonPressed(const char[] output, int 
 }
 
 /**
- * Phase: 11 - Move to control room trigger
+ * Phase: 10 - Move to control room trigger
  * Summary: Bot moves to the control room keypad trigger.
  * Entity: trigger_once
  * Bot action: MOVETO trigger origin
@@ -291,18 +267,215 @@ static void ZPOAbandonedBaseR2_OnVentBroken(const char[] output, int caller, int
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 	HookSingleEntityOutput(trigger, "OnTrigger", ZPOAbandonedBaseR2_OnControlRoomTriggered, true);
 }
 
 /**
- * Phase: 12 - Reset objective
- * Summary: Objective resets once the control room trigger fires.
- * Entity: trigger_once
+ * Phase: 11 - Wait for the C4 blast
+ * Summary: Bot idles while the scripted C4 blast breaks the control room glass.
+ * Entity: func_breakable
  * Bot action: none
- * Confirmation: Control room trigger fired.
+ * Confirmation: Control room glass broken.
  */
 static void ZPOAbandonedBaseR2_OnControlRoomTriggered(const char[] output, int caller, int activator, float delay)
+{
+	int glass = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_breakable", 1559);
+
+	if (glass == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_abandoned_base_r2: Failed to find func_breakable! Hammer ID: 1559");
+		return;
+	}
+
+	NavBotZPSModInterface.ResetObjective();
+	HookSingleEntityOutput(glass, "OnBreak", ZPOAbandonedBaseR2_OnControlRoomGlassBroken, true);
+}
+
+/**
+ * Phase: 12 - Investigate the gate
+ * Summary: Bot moves to the gate trigger to investigate it.
+ * Entity: trigger_once
+ * Bot action: MOVETO fixed position
+ * Confirmation: Gate trigger fired.
+ */
+static void ZPOAbandonedBaseR2_OnControlRoomGlassBroken(const char[] output, int caller, int activator, float delay)
+{
+	int trigger = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "trigger_once", 247502);
+
+	if (trigger == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_abandoned_base_r2: Failed to find trigger_once! Hammer ID: 247502");
+		return;
+	}
+
+	float goal[3] = { 1210.0, 6909.0, 89.0 };
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	CanAllBotsReachGoal(goal);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+	HookSingleEntityOutput(trigger, "OnTrigger", ZPOAbandonedBaseR2_OnGateTriggered, true);
+}
+
+/**
+ * Phase: 13 - Press prison button
+ * Summary: Bot presses the button that unlocks the prison door.
+ * Entity: func_button
+ * Bot action: USE_BUTTON
+ * Confirmation: Prison button pressed.
+ */
+static void ZPOAbandonedBaseR2_OnGateTriggered(const char[] output, int caller, int activator, float delay)
+{
+	NavBotZPSModInterface.ResetObjective();
+
+	// The gate trigger unlocks Bot?o prisao by input, 2s delay.
+	// There is no native to hook an entity input, so a timer bridges the gap.
+	CreateTimer(2.0, ZPOAbandonedBaseR2_OnPrisonButtonUnlocked, .flags = TIMER_FLAG_NO_MAPCHANGE);
+}
+
+static void ZPOAbandonedBaseR2_OnPrisonButtonUnlocked(Handle timer)
+{
+	int button = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", 1220);
+
+	if (button == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_abandoned_base_r2: Failed to find func_button! Hammer ID: 1220");
+		return;
+	}
+
+	NavBotZPSModInterface.SetObjectiveUseButton(button);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
+	HookSingleEntityOutput(button, "OnPressed", ZPOAbandonedBaseR2_OnPrisonButtonPressed, true);
+}
+
+/**
+ * Phase: 14 - Wait for prison door to open
+ * Summary: Bot waits for the prison door to fully open.
+ * Entity: func_door
+ * Bot action: none
+ * Confirmation: Prison door fully open.
+ */
+static void ZPOAbandonedBaseR2_OnPrisonButtonPressed(const char[] output, int caller, int activator, float delay)
+{
+	int door = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_door", 1218);
+
+	if (door == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_abandoned_base_r2: Failed to find func_door! Hammer ID: 1218");
+		return;
+	}
+
+	NavBotZPSModInterface.ResetObjective();
+	HookSingleEntityOutput(door, "OnFullyOpen", ZPOAbandonedBaseR2_OnPrisonDoorOpened, true);
+}
+
+/**
+ * Phase: 15 - Press the three cell buttons
+ * Summary: Press the three cell buttons in any order.
+ * Entity: func_button
+ * Bot action: USE_BUTTON
+ * Confirmation: all three buttons pressed.
+ */
+static const int CELL_BUTTON_HAMMERIDS[3] = { 1275, 1277, 1279 };
+static bool s_CellButtonDone[3];
+
+static void ZPOAbandonedBaseR2_OnPrisonDoorOpened(const char[] output, int caller, int activator, float delay)
+{
+	s_CellButtonDone[0] = false;
+	s_CellButtonDone[1] = false;
+	s_CellButtonDone[2] = false;
+
+	for (int i = 0; i < 3; i++)
+	{
+		int button = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", CELL_BUTTON_HAMMERIDS[i]);
+
+		if (button == INVALID_ENT_REFERENCE)
+		{
+			LogError("zpo_abandoned_base_r2: Failed to find func_button! Hammer ID: %i", CELL_BUTTON_HAMMERIDS[i]);
+			continue;
+		}
+
+		HookSingleEntityOutput(button, "OnPressed", ZPOAbandonedBaseR2_OnCellButtonPressed, true);
+	}
+
+	ZPOAbandonedBaseR2_TargetNextCellButton();
+}
+
+static void ZPOAbandonedBaseR2_OnCellButtonPressed(const char[] output, int caller, int activator, float delay)
+{
+	int hammerid = GetEntProp(caller, Prop_Data, "m_iHammerID");
+
+	for (int i = 0; i < 3; i++)
+	{
+		if (hammerid == CELL_BUTTON_HAMMERIDS[i])
+		{
+			s_CellButtonDone[i] = true;
+		}
+	}
+
+	ZPOAbandonedBaseR2_TargetNextCellButton();
+}
+
+// A missing button counts as done.
+static void ZPOAbandonedBaseR2_TargetNextCellButton()
+{
+	for (int i = 0; i < 3; i++)
+	{
+		if (s_CellButtonDone[i])
+		{
+			continue;
+		}
+
+		int button = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", CELL_BUTTON_HAMMERIDS[i]);
+
+		if (button == INVALID_ENT_REFERENCE)
+		{
+			s_CellButtonDone[i] = true;
+			continue;
+		}
+
+		NavBotZPSModInterface.ResetObjective();
+		NavBotZPSModInterface.SetObjectiveUseButton(button);
+		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
+		return;
+	}
+
+	ZPOAbandonedBaseR2_ActivateFindKeycard();
+}
+
+/**
+ * Phase: 16 - Find the keycard
+ * Summary: Bot presses the button that picks up the keycard.
+ * Entity: func_button
+ * Bot action: USE_BUTTON
+ * Confirmation: Keycard button pressed.
+ */
+static void ZPOAbandonedBaseR2_ActivateFindKeycard()
+{
+	int button = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", 1283);
+
+	if (button == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_abandoned_base_r2: Failed to find func_button! Hammer ID: 1283");
+		return;
+	}
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveUseButton(button);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
+	HookSingleEntityOutput(button, "OnPressed", ZPOAbandonedBaseR2_OnKeycardFound, true);
+}
+
+/**
+ * Phase: 17 - Reset objective
+ * Summary: Objective resets once the keycard is found.
+ * Entity: func_button
+ * Bot action: none
+ * Confirmation: Keycard button pressed.
+ */
+static void ZPOAbandonedBaseR2_OnKeycardFound(const char[] output, int caller, int activator, float delay)
 {
 	NavBotZPSModInterface.ResetObjective();
 }
