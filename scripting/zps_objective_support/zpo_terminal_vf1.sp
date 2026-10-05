@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_terminal_vf1 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.6.2
+ * Module version: 0.6.4
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: WIP. Search for and use Keycard. Find food. Find and guard Bus 
@@ -26,6 +26,8 @@ static int s_FoodButtons[6];
 static int s_FoodIndex;
 static int s_FoodAreaTotal[3];
 static int s_FoodAreaCount[3];
+static bool s_FoodTaken;
+static bool s_GatesFullyOpen;
 
 // hammerid[6] per case_food outcome.
 static int s_FoodCaseButtons[5][6] =
@@ -51,6 +53,8 @@ void ZPOTerminal_Init()
 	s_FoodStarted = false;
 	s_FoodComplete = false;
 	s_FoodIndex = 0;
+	s_FoodTaken = false;
+	s_GatesFullyOpen = false;
 
 	for (int i = 0; i < sizeof(s_FoodAreaTotal); i++)
 	{
@@ -573,6 +577,26 @@ void ZPOTerminal_OnGatesOpen(const char[] output, int caller, int activator, flo
 {
 	ZPOTerminal_ChatMsgSurvivors("We have unlocked the upper gate!");
 	ZPOTerminal_FindFoodItem();
+
+	int door = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_door", 482332);
+
+	if (door == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_terminal_vf1: Failed to find door_uppergateside3 func_door! Hammer ID: 482332");
+		return;
+	}
+
+	HookSingleEntityOutput(door, "OnFullyOpen", ZPOTerminal_OnGateFullyOpen, true);
+}
+
+void ZPOTerminal_OnGateFullyOpen(const char[] output, int caller, int activator, float delay)
+{
+	s_GatesFullyOpen = true;
+
+	if (s_FoodTaken)
+	{
+		ZPOTerminal_MoveToMainTerminal();
+	}
 }
 
 /**
@@ -592,7 +616,12 @@ void ZPOTerminal_FindFoodItem()
 
 void ZPOTerminal_OnFoodItemTaken(const char[] output, int caller, int activator, float delay)
 {
-	ZPOTerminal_MoveToMainTerminal();
+	s_FoodTaken = true;
+
+	if (s_GatesFullyOpen)
+	{
+		ZPOTerminal_MoveToMainTerminal();
+	}
 }
 
 /**
