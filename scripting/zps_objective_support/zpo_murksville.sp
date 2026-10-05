@@ -99,6 +99,7 @@ static void ZPOMurksville_MoveToCart()
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 
 	s_LastCartPos = goal;
@@ -112,6 +113,7 @@ static void ZPOMurksville_OnCartTriggerTouched(const char[] output, int caller, 
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(pos);
+	CanAllBotsReachGoal(pos);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 
 	s_LastCartPos = pos;
@@ -133,6 +135,7 @@ static void ZPOMurksville_UpdateCartTriggerObjective()
 		{
 			NavBotZPSModInterface.ResetObjective();
 			NavBotZPSModInterface.SetObjectiveMoveGoal(pos);
+			CanAllBotsReachGoal(pos);
 			NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 
 			s_LastCartPos = pos;
@@ -164,6 +167,7 @@ static void ZPOMurksville_UpdatePumpTriggerObjective()
 
 		NavBotZPSModInterface.ResetObjective();
 		NavBotZPSModInterface.SetObjectiveMoveGoal(pos);
+		CanAllBotsReachGoal(pos);
 		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 	}
 }

@@ -141,6 +141,7 @@ void ZPOGasdumpNF1_ActivateEnterStation()
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(pos);
+	CanAllBotsReachGoal(pos);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 
 	HookSingleEntityOutput(trigger, "OnStartTouch", ZPOGasdumpNF1_OnEnteredStation, true);
