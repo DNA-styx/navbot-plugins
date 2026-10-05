@@ -108,6 +108,7 @@ public void OnNavBotModRoundRestart()
 
 void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
+	g_ThinkFunc = null;
 	NavBotZPSModInterface.ResetObjective();
 }
 
