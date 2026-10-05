@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_area41_v7f map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.5.2
+ * Module version: 0.5.3
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: Partially complete
@@ -198,12 +198,19 @@ static void ZPOArea41V7F_OnBt1OPressed(const char[] output, int caller, int acti
 
 /**
  * Phase: 6 - HackingComplete
- * Summary: Moves bots on once the hacking capture point is taken and the tunnel door opens.
- * Entity: trigger_capturepoint_zp
- * Bot action: MOVETO fixed position
- * Confirmation: HackingTrigger1's OnHumanCaptureCompleted
+ * Summary: Move through the tunnel once the hack is done.
+ * Entity: trigger_capturepoint_zp, func_door
+ * Bot action: MOVETO fixed position after 3 seconds
+ * Confirmation: HackingTrigger1's OnHumanCaptureCompleted, then a 3 second timer while the tunnel door opens
  */
 static void ZPOArea41V7F_OnHackingComplete(const char[] output, int caller, int activator, float delay)
+{
+	NavBotZPSModInterface.ResetObjective();
+
+	CreateTimer(3.0, ZPOArea41V7F_Timer_TunnelDoorOpen, .flags = TIMER_FLAG_NO_MAPCHANGE);
+}
+
+static void ZPOArea41V7F_Timer_TunnelDoorOpen(Handle timer)
 {
 	float goal[3] = { 5218.8, -7027.5, -958.0 };
 
