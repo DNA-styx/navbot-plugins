@@ -1,4 +1,7 @@
 
+#pragma newdecls required
+#pragma semicolon 1
+
 // Each objective map gets a unique value here for the switch statement
 enum ZPOMap
 {
@@ -138,6 +141,7 @@ void InitObjectives()
 	}
 
 	g_ThinkFunc = null;
+	g_OnRoundEndFunc = null;
 
 	// Perf: This gets called on every round restart, this is faster than strcmp the map every time.
 	switch (s_detectedMap)

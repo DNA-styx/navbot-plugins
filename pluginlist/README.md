@@ -66,3 +66,7 @@ Optional per map log file and stuck event count threshold, check auto generated 
 
 Automatically updates the skill level of in-game bots when the skill ConVar is changed.    
 
+## NavBot Path Logger
+
+Logs to a file every time a complete path cannot be built. Useful for finding problematic nav meshes.
+

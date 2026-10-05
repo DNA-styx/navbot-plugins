@@ -1,4 +1,7 @@
 
+#pragma newdecls required
+#pragma semicolon 1
+
 void RegisterDebugCommands()
 {
 	RegAdminCmd("sm_nbzpodebug_reset", DebugCommand_Reset, ADMFLAG_CHEATS, "Reset and sets the objective to none.");

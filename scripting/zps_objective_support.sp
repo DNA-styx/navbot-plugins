@@ -15,7 +15,8 @@ public Plugin myinfo =
 	url = "https://github.com/caxanga334/navbot-plugins"
 };
 
-Function g_ThinkFunc = null;
+Function g_ThinkFunc = null; // Think function, called every 1 second
+Function g_OnRoundEndFunc = null; // Round end function, called when the round end game event is fired.
 ConVar cvar_detradius = null;
 ConVar cvar_debug = null;
 float g_DetectionRadius;
@@ -99,6 +100,7 @@ public void OnMapEnd()
 {
 	// The think function timer is reset before the 
 	g_ThinkFunc = null;
+	g_OnRoundEndFunc = null;
 }
 
 public void OnNavBotModRoundRestart()
@@ -110,6 +112,12 @@ void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
 	g_ThinkFunc = null;
 	NavBotZPSModInterface.ResetObjective();
+
+	if (g_OnRoundEndFunc != null)
+	{
+		Call_StartFunction(null, g_OnRoundEndFunc);
+		Call_Finish();
+	}
 }
 
 void Timer_CallThink(Handle timer)
