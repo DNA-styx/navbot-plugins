@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_noexit_h2 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.3.4
+ * Module version: 0.4.0
  * Author: Claude.ai guided by DNA.styx
  *
  * Status:
@@ -56,17 +56,12 @@ static void ZPONoexitH2_CloseStartDoors()
 		NavBotZPSModInterface.ResetObjective();
 		NavBotZPSModInterface.SetObjectiveUseButton(button);
 		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
-		HookSingleEntityOutput(button, "OnPressed", ZPONoexitH2_OnStartDoorsButtonPressed, true);
+		HookSingleEntityOutput(button, "OnPressed", ZPONoexitH2_WaitForDoors, true);
 	}
 	else
 	{
 		LogError("zpo_noexit_h2: Failed to find func_rot_button! Name: no_exitdoors_button");
 	}
-}
-
-static void ZPONoexitH2_OnStartDoorsButtonPressed(const char[] output, int caller, int activator, float delay)
-{
-	ZPONoexitH2_WaitForDoors();
 }
 
 /**
@@ -76,7 +71,7 @@ static void ZPONoexitH2_OnStartDoorsButtonPressed(const char[] output, int calle
  * Bot action: MOVETO
  * Confirmation: The door counter reaches its maximum.
  */
-static void ZPONoexitH2_WaitForDoors()
+static void ZPONoexitH2_WaitForDoors(const char[] output, int caller, int activator, float delay)
 {
 	ZPONoexitH2_ChatMsgSurvivors("Guard the lift!");
 
@@ -89,17 +84,12 @@ static void ZPONoexitH2_WaitForDoors()
 		CanAllBotsReachGoal(goal);
 		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-		HookSingleEntityOutput(counter, "OnHitMax", ZPONoexitH2_OnDoorsClosed, true);
+		HookSingleEntityOutput(counter, "OnHitMax", ZPONoexitH2_CallElevator, true);
 	}
 	else
 	{
 		LogError("zpo_noexit_h2: Failed to find math_counter! Name: no_exitdoors_counter");
 	}
-}
-
-static void ZPONoexitH2_OnDoorsClosed(const char[] output, int caller, int activator, float delay)
-{
-	ZPONoexitH2_CallElevator();
 }
 
 /**
@@ -109,7 +99,7 @@ static void ZPONoexitH2_OnDoorsClosed(const char[] output, int caller, int activ
  * Bot action: USE_BUTTON
  * Confirmation: The button is pressed.
  */
-static void ZPONoexitH2_CallElevator()
+static void ZPONoexitH2_CallElevator(const char[] output, int caller, int activator, float delay)
 {
 	ZPONoexitH2_ChatMsgSurvivors("Doors are shut, start the elevator!");
 
@@ -120,17 +110,12 @@ static void ZPONoexitH2_CallElevator()
 		NavBotZPSModInterface.ResetObjective();
 		NavBotZPSModInterface.SetObjectiveUseButton(button);
 		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
-		HookSingleEntityOutput(button, "OnPressed", ZPONoexitH2_OnElevatorCalled, true);
+		HookSingleEntityOutput(button, "OnPressed", ZPONoexitH2_RideElevator, true);
 	}
 	else
 	{
 		LogError("zpo_noexit_h2: Failed to find func_button! Name: elevator2_button");
 	}
-}
-
-static void ZPONoexitH2_OnElevatorCalled(const char[] output, int caller, int activator, float delay)
-{
-	ZPONoexitH2_RideElevator();
 }
 
 /**
@@ -140,7 +125,7 @@ static void ZPONoexitH2_OnElevatorCalled(const char[] output, int caller, int ac
  * Bot action: MOVETO
  * Confirmation: The elevator passes its final track node.
  */
-static void ZPONoexitH2_RideElevator()
+static void ZPONoexitH2_RideElevator(const char[] output, int caller, int activator, float delay)
 {
 	ZPONoexitH2_ChatMsgSurvivors("Hold on, heading down!");
 
@@ -153,17 +138,12 @@ static void ZPONoexitH2_RideElevator()
 		CanAllBotsReachGoal(goal);
 		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-		HookSingleEntityOutput(track, "OnPass", ZPONoexitH2_OnElevatorArrived, true);
+		HookSingleEntityOutput(track, "OnPass", ZPONoexitH2_FindKeys, true);
 	}
 	else
 	{
 		LogError("zpo_noexit_h2: Failed to find path_track! Name: elevator2_track2");
 	}
-}
-
-static void ZPONoexitH2_OnElevatorArrived(const char[] output, int caller, int activator, float delay)
-{
-	ZPONoexitH2_FindKeys();
 }
 
 /**
@@ -173,7 +153,7 @@ static void ZPONoexitH2_OnElevatorArrived(const char[] output, int caller, int a
  * Bot action: None
  * Confirmation: The keys are taken.
  */
-static void ZPONoexitH2_FindKeys()
+static void ZPONoexitH2_FindKeys(const char[] output, int caller, int activator, float delay)
 {
 	ZPONoexitH2_ChatMsgSurvivors("Find the keys! We will guard!");
 
@@ -182,17 +162,12 @@ static void ZPONoexitH2_FindKeys()
 	if (keys != INVALID_ENT_REFERENCE)
 	{
 		NavBotZPSModInterface.ResetObjective();
-		HookSingleEntityOutput(keys, "OnItemTaken", ZPONoexitH2_OnKeysTaken, true);
+		HookSingleEntityOutput(keys, "OnItemTaken", ZPONoexitH2_UseKeys, true);
 	}
 	else
 	{
 		LogError("zpo_noexit_h2: Failed to find item_deliver! Name: keys");
 	}
-}
-
-static void ZPONoexitH2_OnKeysTaken(const char[] output, int caller, int activator, float delay)
-{
-	ZPONoexitH2_UseKeys();
 }
 
 /**
@@ -202,7 +177,7 @@ static void ZPONoexitH2_OnKeysTaken(const char[] output, int caller, int activat
  * Bot action: MOVETO
  * Confirmation: The keys are used.
  */
-static void ZPONoexitH2_UseKeys()
+static void ZPONoexitH2_UseKeys(const char[] output, int caller, int activator, float delay)
 {
 	ZPONoexitH2_ChatMsgSurvivors("Keys found! Open the office door!");
 
@@ -215,17 +190,12 @@ static void ZPONoexitH2_UseKeys()
 		CanAllBotsReachGoal(goal);
 		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-		HookSingleEntityOutput(lock, "OnUsed", ZPONoexitH2_OnKeysUsed, true);
+		HookSingleEntityOutput(lock, "OnUsed", ZPONoexitH2_FindKeycard, true);
 	}
 	else
 	{
 		LogError("zpo_noexit_h2: Failed to find trigger_useable! Name: office_doors_trigger");
 	}
-}
-
-static void ZPONoexitH2_OnKeysUsed(const char[] output, int caller, int activator, float delay)
-{
-	ZPONoexitH2_FindKeycard();
 }
 
 /**
@@ -235,7 +205,7 @@ static void ZPONoexitH2_OnKeysUsed(const char[] output, int caller, int activato
  * Bot action: FIND_ITEM
  * Confirmation: The keycard is taken.
  */
-static void ZPONoexitH2_FindKeycard()
+static void ZPONoexitH2_FindKeycard(const char[] output, int caller, int activator, float delay)
 {
 	ZPONoexitH2_ChatMsgSurvivors("Find the keycard!");
 
@@ -247,17 +217,12 @@ static void ZPONoexitH2_FindKeycard()
 		NavBotZPSModInterface.SetObjectiveItemSearchID("keycard");
 		NavBotZPSModInterface.SetObjectiveDetectionRadius(g_DetectionRadius * 2.0);
 		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_FIND_ITEM);
-		HookSingleEntityOutput(keycard, "OnItemTaken", ZPONoexitH2_OnKeycardTaken, true);
+		HookSingleEntityOutput(keycard, "OnItemTaken", ZPONoexitH2_UseKeycard, true);
 	}
 	else
 	{
 		LogError("zpo_noexit_h2: Failed to find item_deliver! Name: keycard");
 	}
-}
-
-static void ZPONoexitH2_OnKeycardTaken(const char[] output, int caller, int activator, float delay)
-{
-	ZPONoexitH2_UseKeycard();
 }
 
 /**
@@ -267,7 +232,7 @@ static void ZPONoexitH2_OnKeycardTaken(const char[] output, int caller, int acti
  * Bot action: USE_ITEM
  * Confirmation: The keycard is used.
  */
-static void ZPONoexitH2_UseKeycard()
+static void ZPONoexitH2_UseKeycard(const char[] output, int caller, int activator, float delay)
 {
 	ZPONoexitH2_ChatMsgSurvivors("Keycard found! Open the lab door!");
 
@@ -280,17 +245,12 @@ static void ZPONoexitH2_UseKeycard()
 		NavBotZPSModInterface.SetObjectiveItemUseTarget(reader);
 		NavBotZPSModInterface.SetObjectiveDetectionRadius(999999.0);
 		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_ITEM);
-		HookSingleEntityOutput(reader, "OnUsed", ZPONoexitH2_OnKeycardUsed, true);
+		HookSingleEntityOutput(reader, "OnUsed", ZPONoexitH2_GuardLab, true);
 	}
 	else
 	{
 		LogError("zpo_noexit_h2: Failed to find trigger_useable! Name: cardreader_trigger");
 	}
-}
-
-static void ZPONoexitH2_OnKeycardUsed(const char[] output, int caller, int activator, float delay)
-{
-	ZPONoexitH2_GuardLab();
 }
 
 /**
@@ -300,7 +260,7 @@ static void ZPONoexitH2_OnKeycardUsed(const char[] output, int caller, int activ
  * Bot action: MOVETO
  * Confirmation: The airlock doors start to open.
  */
-static void ZPONoexitH2_GuardLab()
+static void ZPONoexitH2_GuardLab(const char[] output, int caller, int activator, float delay)
 {
 	ZPONoexitH2_ChatMsgSurvivors("Guard the lab until the airlock opens!");
 
@@ -313,81 +273,12 @@ static void ZPONoexitH2_GuardLab()
 		CanAllBotsReachGoal(goal);
 		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-		HookSingleEntityOutput(airlock, "OnOpen", ZPONoexitH2_OnAirlockOpened, true);
+		HookSingleEntityOutput(airlock, "OnOpen", ZPONoexitH2_PullLever, true);
 	}
 	else
 	{
 		LogError("zpo_noexit_h2: Failed to find func_door! Name: airlock_doors");
 	}
-}
-
-static void ZPONoexitH2_OnAirlockOpened(const char[] output, int caller, int activator, float delay)
-{
-	ZPONoexitH2_CallLabElevator();
-}
-
-/**
- * Phase: 8 - Call lab elevator
- * Summary: Press the lab elevator button.
- * Entity: func_button
- * Bot action: USE_BUTTON
- * Confirmation: The button is pressed.
- */
-static void ZPONoexitH2_CallLabElevator()
-{
-	ZPONoexitH2_ChatMsgSurvivors("Airlock is open, take the elevator!");
-
-	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "elevator_button");
-
-	if (button != INVALID_ENT_REFERENCE)
-	{
-		NavBotZPSModInterface.ResetObjective();
-		NavBotZPSModInterface.SetObjectiveUseButton(button);
-		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
-		HookSingleEntityOutput(button, "OnPressed", ZPONoexitH2_OnLabElevatorCalled, true);
-	}
-	else
-	{
-		LogError("zpo_noexit_h2: Failed to find func_button! Name: elevator_button");
-	}
-}
-
-static void ZPONoexitH2_OnLabElevatorCalled(const char[] output, int caller, int activator, float delay)
-{
-	ZPONoexitH2_RideLabElevator();
-}
-
-/**
- * Phase: 8.1 - Ride lab elevator
- * Summary: Hold in the elevator until it reaches the bottom.
- * Entity: path_track
- * Bot action: MOVETO
- * Confirmation: The elevator passes the bottom track node.
- */
-static void ZPONoexitH2_RideLabElevator()
-{
-	ZPONoexitH2_ChatMsgSurvivors("Wait for the elevator to reach the bottom!");
-
-	int track = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "track2");
-
-	if (track != INVALID_ENT_REFERENCE)
-	{
-		float goal[3] = { -442.9, 886.4, -1568.0 };
-		NavBotZPSModInterface.ResetObjective();
-		CanAllBotsReachGoal(goal);
-		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-		HookSingleEntityOutput(track, "OnPass", ZPONoexitH2_OnLabElevatorArrived, true);
-	}
-	else
-	{
-		LogError("zpo_noexit_h2: Failed to find path_track! Name: track2");
-	}
-}
-
-static void ZPONoexitH2_OnLabElevatorArrived(const char[] output, int caller, int activator, float delay)
-{
-	ZPONoexitH2_PullLever();
 }
 
 /**
@@ -397,7 +288,7 @@ static void ZPONoexitH2_OnLabElevatorArrived(const char[] output, int caller, in
  * Bot action: USE_BUTTON
  * Confirmation: The button is pressed.
  */
-static void ZPONoexitH2_PullLever()
+static void ZPONoexitH2_PullLever(const char[] output, int caller, int activator, float delay)
 {
 	ZPONoexitH2_ChatMsgSurvivors("Pull the lever!");
 
@@ -408,17 +299,12 @@ static void ZPONoexitH2_PullLever()
 		NavBotZPSModInterface.ResetObjective();
 		NavBotZPSModInterface.SetObjectiveUseButton(button);
 		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
-		HookSingleEntityOutput(button, "OnPressed", ZPONoexitH2_OnLeverPulled, true);
+		HookSingleEntityOutput(button, "OnPressed", ZPONoexitH2_WaitForPipeDrop, true);
 	}
 	else
 	{
 		LogError("zpo_noexit_h2: Failed to find func_button! Name: bucket_button");
 	}
-}
-
-static void ZPONoexitH2_OnLeverPulled(const char[] output, int caller, int activator, float delay)
-{
-	ZPONoexitH2_WaitForPipeDrop();
 }
 
 /**
@@ -428,7 +314,7 @@ static void ZPONoexitH2_OnLeverPulled(const char[] output, int caller, int activ
  * Bot action: MOVETO
  * Confirmation: The lower pipe barrier is broken.
  */
-static void ZPONoexitH2_WaitForPipeDrop()
+static void ZPONoexitH2_WaitForPipeDrop(const char[] output, int caller, int activator, float delay)
 {
 	ZPONoexitH2_ChatMsgSurvivors("Wait for the pipe drop!");
 
@@ -441,17 +327,12 @@ static void ZPONoexitH2_WaitForPipeDrop()
 		CanAllBotsReachGoal(goal);
 		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-		HookSingleEntityOutput(pipe, "OnBreak", ZPONoexitH2_OnPipeBroken, true);
+		HookSingleEntityOutput(pipe, "OnBreak", ZPONoexitH2_ApproachFinalDoor, true);
 	}
 	else
 	{
 		LogError("zpo_noexit_h2: Failed to find func_breakable! Name: breakpipe_down");
 	}
-}
-
-static void ZPONoexitH2_OnPipeBroken(const char[] output, int caller, int activator, float delay)
-{
-	ZPONoexitH2_ApproachFinalDoor();
 }
 
 /**
@@ -461,7 +342,7 @@ static void ZPONoexitH2_OnPipeBroken(const char[] output, int caller, int activa
  * Bot action: MOVETO
  * Confirmation: The final door is fully open.
  */
-static void ZPONoexitH2_ApproachFinalDoor()
+static void ZPONoexitH2_ApproachFinalDoor(const char[] output, int caller, int activator, float delay)
 {
 	ZPONoexitH2_ChatMsgSurvivors("Pipe is open, get to the final door!");
 
@@ -474,17 +355,12 @@ static void ZPONoexitH2_ApproachFinalDoor()
 		CanAllBotsReachGoal(goal);
 		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-		HookSingleEntityOutput(door, "OnFullyOpen", ZPONoexitH2_OnFinalDoorOpened, true);
+		HookSingleEntityOutput(door, "OnFullyOpen", ZPONoexitH2_CloseBlastDoors, true);
 	}
 	else
 	{
 		LogError("zpo_noexit_h2: Failed to find func_door! Name: final_door");
 	}
-}
-
-static void ZPONoexitH2_OnFinalDoorOpened(const char[] output, int caller, int activator, float delay)
-{
-	ZPONoexitH2_CloseBlastDoors();
 }
 
 /**
@@ -494,7 +370,7 @@ static void ZPONoexitH2_OnFinalDoorOpened(const char[] output, int caller, int a
  * Bot action: USE_BUTTON
  * Confirmation: The button is pressed.
  */
-static void ZPONoexitH2_CloseBlastDoors()
+static void ZPONoexitH2_CloseBlastDoors(const char[] output, int caller, int activator, float delay)
 {
 	ZPONoexitH2_ChatMsgSurvivors("Final door is open, close the blast doors!");
 
@@ -505,17 +381,12 @@ static void ZPONoexitH2_CloseBlastDoors()
 		NavBotZPSModInterface.ResetObjective();
 		NavBotZPSModInterface.SetObjectiveUseButton(button);
 		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
-		HookSingleEntityOutput(button, "OnPressed", ZPONoexitH2_OnBlastDoorsButtonPressed, true);
+		HookSingleEntityOutput(button, "OnPressed", ZPONoexitH2_WaitForBlastDoors, true);
 	}
 	else
 	{
 		LogError("zpo_noexit_h2: Failed to find func_rot_button! Name: final_blastdoor_button");
 	}
-}
-
-static void ZPONoexitH2_OnBlastDoorsButtonPressed(const char[] output, int caller, int activator, float delay)
-{
-	ZPONoexitH2_WaitForBlastDoors();
 }
 
 /**
@@ -525,7 +396,7 @@ static void ZPONoexitH2_OnBlastDoorsButtonPressed(const char[] output, int calle
  * Bot action: MOVETO
  * Confirmation: The blast door counter reaches its maximum.
  */
-static void ZPONoexitH2_WaitForBlastDoors()
+static void ZPONoexitH2_WaitForBlastDoors(const char[] output, int caller, int activator, float delay)
 {
 	ZPONoexitH2_ChatMsgSurvivors("Wait for the blast doors to close!");
 
@@ -538,17 +409,12 @@ static void ZPONoexitH2_WaitForBlastDoors()
 		CanAllBotsReachGoal(goal);
 		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-		HookSingleEntityOutput(counter, "OnHitMax", ZPONoexitH2_OnBlastDoorsClosed, true);
+		HookSingleEntityOutput(counter, "OnHitMax", ZPONoexitH2_CallEscapeElevator, true);
 	}
 	else
 	{
 		LogError("zpo_noexit_h2: Failed to find math_counter! Name: final_blastdoors_counter");
 	}
-}
-
-static void ZPONoexitH2_OnBlastDoorsClosed(const char[] output, int caller, int activator, float delay)
-{
-	ZPONoexitH2_CallEscapeElevator();
 }
 
 /**
@@ -558,7 +424,7 @@ static void ZPONoexitH2_OnBlastDoorsClosed(const char[] output, int caller, int 
  * Bot action: USE_BUTTON
  * Confirmation: The button is pressed.
  */
-static void ZPONoexitH2_CallEscapeElevator()
+static void ZPONoexitH2_CallEscapeElevator(const char[] output, int caller, int activator, float delay)
 {
 	ZPONoexitH2_ChatMsgSurvivors("Blast doors are shut, start the escape elevator!");
 
