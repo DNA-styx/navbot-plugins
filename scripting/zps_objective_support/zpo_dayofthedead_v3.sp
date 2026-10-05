@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_dayofthedead_v3 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.3.3
+ * Module version: 0.3.4
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: Usable
@@ -33,12 +33,12 @@ void ZPODayOfTheDeadV3_Think()
  */
 static void ZPODayOfTheDeadV3_ActivateFindKeyCard()
 {
-	// button_kc-01 is the map .as script's runtime rename of KeyCard-01_Button.
-	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "button_kc-01");
+	const int hammerid = 223854;
+	int button = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", hammerid);
 
 	if (button == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_dayofthedead_v3: Failed to find button_kc-01 func_button!");
+		LogError("zpo_dayofthedead_v3: Failed to find keycard func_button! Hammer ID: %i", hammerid);
 		return;
 	}
 
@@ -86,6 +86,7 @@ static void ZPODayOfTheDeadV3_OnPowerSwitched(const char[] output, int caller, i
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 
 	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door", "ControlRoom_CargoDoor");
@@ -130,12 +131,12 @@ static void ZPODayOfTheDeadV3_OnCargoDoorOpening(const char[] output, int caller
  */
 static void ZPODayOfTheDeadV3_OnLiftButtonPressed(const char[] output, int caller, int activator, float delay)
 {
-	// button_bpack is the map .as script's runtime rename of IED_Button.
-	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "button_bpack");
+	const int hammerid = 345471;
+	int button = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", hammerid);
 
 	if (button == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_dayofthedead_v3: Failed to find button_bpack func_button!");
+		LogError("zpo_dayofthedead_v3: Failed to find IED func_button! Hammer ID: %i", hammerid);
 		return;
 	}
 
@@ -181,6 +182,7 @@ static void ZPODayOfTheDeadV3_OnIEDArmed(const char[] output, int caller, int ac
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 
 	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door", "C4_Door");
@@ -202,12 +204,12 @@ static void ZPODayOfTheDeadV3_OnIEDArmed(const char[] output, int caller, int ac
  */
 static void ZPODayOfTheDeadV3_OnIEDPlanted(const char[] output, int caller, int activator, float delay)
 {
-	// button_kc-02 is the map .as script's runtime rename of KeyCard-02_Button.
-	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "button_kc-02");
+	const int hammerid = 224297;
+	int button = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", hammerid);
 
 	if (button == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_dayofthedead_v3: Failed to find button_kc-02 func_button!");
+		LogError("zpo_dayofthedead_v3: Failed to find keys func_button! Hammer ID: %i", hammerid);
 		return;
 	}
 
@@ -258,5 +260,6 @@ static void ZPODayOfTheDeadV3_OnCountdownTimer(Handle timer, any data)
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 }
