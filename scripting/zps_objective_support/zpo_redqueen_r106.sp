@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_redqueen_r106 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.5.1
+ * Module version: 0.8.0
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: WIP - Exit spawn, find keycard and open first door.
@@ -19,7 +19,7 @@ void ZPORedQueenR106_Init()
 {
 	g_ThinkFunc = ZPORedQueenR106_Think;
 
-	ZPORedQueenR106_ActivateOpenSpawnDoor();
+	ZPORedQueenR106_WaitForSpawnDoor();
 }
 
 void ZPORedQueenR106_Think()
@@ -27,187 +27,224 @@ void ZPORedQueenR106_Think()
 	// Left empty until a phase needs per-tick polling.
 }
 
+static void ZPORedQueenR106_ChatMsgSurvivors(const char[] msg)
+{
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (IsClientInGame(client) && GetClientTeam(client) == 2)
+		{
+			PrintToChat(client, "\x04[NAV]\x01 %s", msg);
+		}
+	}
+}
+
 /**
- * Phase: 0 - OpenSpawnDoor
- * Summary: Bot opens the spawn door.
- * Entity: trigger_once, func_door
- * Bot action: MOVETO trigger
- * Confirmation: trigger touched, then a timer matched to the door's opening time
+ * Phase: 0 - WaitForSpawnDoor
+ * Summary: Wait for the spawn door to open.
+ * Entity: func_door
+ * Bot action: none
+ * Confirmation: spawn door fully open
  */
-static void ZPORedQueenR106_ActivateOpenSpawnDoor()
+static void ZPORedQueenR106_WaitForSpawnDoor()
 {
-	int trigger = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "trigger_once", 1560);
+	ZPORedQueenR106_ChatMsgSurvivors("Wait for the spawn door to open!");
 
-	if (trigger == INVALID_ENT_REFERENCE)
+	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door", "door1");
+
+	if (door == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_redqueen_r106: Failed to find spawn door trigger_once! Hammer ID: %i", 1560);
+		LogError("zpo_redqueen_r106: Failed to find door1 func_door!");
+		return;
 	}
-	else
-	{
-		float goal[3] = { 288.0, 288.0, 108.0 };
 
-		NavBotZPSModInterface.ResetObjective();
-		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-		CanAllBotsReachGoal(goal);
-		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-
-		HookSingleEntityOutput(trigger, "OnStartTouch", ZPORedQueenR106_OnSpawnDoorTriggerTouched, true);
-	}
-}
-
-static void ZPORedQueenR106_OnSpawnDoorTriggerTouched(const char[] output, int caller, int activator, float delay)
-{
-	NavBotZPSModInterface.ResetObjective();
-	CreateTimer(10.0, ZPORedQueenR106_Timer_SpawnDoorOpen, .flags = TIMER_FLAG_NO_MAPCHANGE);
-}
-
-static void ZPORedQueenR106_Timer_SpawnDoorOpen(Handle timer)
-{
-	ZPORedQueenR106_ActivateGetKeycard();
+	HookSingleEntityOutput(door, "OnFullyOpen", ZPORedQueenR106_GetKeycard, true);
 }
 
 /**
  * Phase: 1 - GetKeycard
- * Summary: Bot picks up the keycard.
+ * Summary: Fetch the keycard.
  * Entity: trigger_once
- * Bot action: MOVETO trigger
- * Confirmation: trigger touched
+ * Bot action: MOVETO, plus MOVE_TO plugin command for one bot
+ * Confirmation: keycard trigger touched
  */
-static void ZPORedQueenR106_ActivateGetKeycard()
+static void ZPORedQueenR106_GetKeycard(const char[] output, int caller, int activator, float delay)
 {
-	int trigger = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "trigger_once", 1326);
+	ZPORedQueenR106_ChatMsgSurvivors("Door is open, one of us will fetch the keycard!");
+
+	const int hammerid = 1326;
+	int trigger = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "trigger_once", hammerid);
 
 	if (trigger == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_redqueen_r106: Failed to find keycard trigger_once! Hammer ID: %i", 1326);
+		LogError("zpo_redqueen_r106: Failed to find keycard trigger_once! Hammer ID: %i", hammerid);
+		return;
 	}
-	else
+
+	float goal[3] = { 1364.0, -1613.7, -128.0 };
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+	CanAllBotsReachGoal(goal);
+
+	HookSingleEntityOutput(trigger, "OnStartTouch", ZPORedQueenR106_UseKeycardOnDoor, true);
+
+	int candidates[MAXPLAYERS + 1];
+	int count = 0;
+
+	for (int client = 1; client <= MaxClients; client++)
 	{
-		float goal[3] = { 1356.5, -272.5, -950.5 };
-
-		NavBotZPSModInterface.ResetObjective();
-		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-		CanAllBotsReachGoal(goal);
-		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-
-		HookSingleEntityOutput(trigger, "OnStartTouch", ZPORedQueenR106_OnKeycardPickedUp, true);
+		if (IsClientInGame(client) && IsFakeClient(client) && GetClientTeam(client) == 2)
+		{
+			candidates[count] = client;
+			count++;
+		}
 	}
-}
 
-static void ZPORedQueenR106_OnKeycardPickedUp(const char[] output, int caller, int activator, float delay)
-{
-	ZPORedQueenR106_ActivateUseKeycardOnDoor();
+	if (count == 0)
+	{
+		return;
+	}
+
+	int chosen = candidates[GetRandomInt(0, count - 1)];
+	float keycard[3] = { 1621.5, -248.5, -783.5 };
+
+	NavBot bot = view_as<NavBot>(chosen);
+	bot.SendPluginCommand(NAVBOT_PLUGINCMD_MOVE_TO, keycard);
 }
 
 /**
  * Phase: 2 - UseKeycardOnDoor
- * Summary: Bot uses the keycard on the door.
+ * Summary: Use the keycard on the security door.
  * Entity: trigger_once, func_door
- * Bot action: MOVETO trigger
- * Confirmation: trigger touched, then a timer matched to the door's scripted open delay
+ * Bot action: MOVETO, then none
+ * Confirmation: security door fully open
  */
-static void ZPORedQueenR106_ActivateUseKeycardOnDoor()
+static void ZPORedQueenR106_UseKeycardOnDoor(const char[] output, int caller, int activator, float delay)
 {
+	ZPORedQueenR106_ChatMsgSurvivors("Got the keycard, use it on the security door!");
+
 	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_once", "door3tr");
 
 	if (trigger == INVALID_ENT_REFERENCE)
 	{
 		LogError("zpo_redqueen_r106: Failed to find door3tr trigger_once!");
+		return;
 	}
-	else
-	{
-		float goal[3] = { 1518.9, -1500.0, -127.0 };
 
-		NavBotZPSModInterface.ResetObjective();
-		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-		CanAllBotsReachGoal(goal);
-		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+	float goal[3] = { 1518.9, -1500.0, -127.0 };
 
-		HookSingleEntityOutput(trigger, "OnStartTouch", ZPORedQueenR106_OnDoor3trTouched, true);
-	}
-}
-
-static void ZPORedQueenR106_OnDoor3trTouched(const char[] output, int caller, int activator, float delay)
-{
 	NavBotZPSModInterface.ResetObjective();
-	CreateTimer(5.0, ZPORedQueenR106_Timer_Door3Opening, .flags = TIMER_FLAG_NO_MAPCHANGE);
+	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+	CanAllBotsReachGoal(goal);
+
+	HookSingleEntityOutput(trigger, "OnStartTouch", ZPORedQueenR106_OnKeycardUsed, true);
 }
 
-static void ZPORedQueenR106_Timer_Door3Opening(Handle timer)
+static void ZPORedQueenR106_OnKeycardUsed(const char[] output, int caller, int activator, float delay)
 {
-	ZPORedQueenR106_ActivateHackPanel();
+	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door", "door3");
+
+	if (door == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_redqueen_r106: Failed to find door3 func_door!");
+		return;
+	}
+
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_NONE);
+	NavBotZPSModInterface.ResetObjective();
+
+	HookSingleEntityOutput(door, "OnFullyOpen", ZPORedQueenR106_ActivateHackPanel, true);
 }
 
 /**
  * Phase: 3 - HackPanel
- * Summary: Bot hacks the panel by holding the capture zone.
+ * Summary: Hack the panel by holding the capture zone.
  * Entity: trigger_capturepoint_zp
- * Bot action: MOVETO capture zone
+ * Bot action: MOVETO
  * Confirmation: capture completed
  */
-static void ZPORedQueenR106_ActivateHackPanel()
+static void ZPORedQueenR106_ActivateHackPanel(const char[] output, int caller, int activator, float delay)
 {
-	int capturepoint = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "trigger_capturepoint_zp", 1565);
+	ZPORedQueenR106_ChatMsgSurvivors("Security door is open, hack the panel!");
+
+	const int hammerid = 1565;
+	int capturepoint = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "trigger_capturepoint_zp", hammerid);
 
 	if (capturepoint == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_redqueen_r106: Failed to find hack panel trigger_capturepoint_zp! Hammer ID: %i", 1565);
+		LogError("zpo_redqueen_r106: Failed to find hack panel trigger_capturepoint_zp! Hammer ID: %i", hammerid);
+		return;
 	}
-	else
-	{
-		float goal[3] = { 1813.1, -2807.8, -141.8 };
 
-		NavBotZPSModInterface.ResetObjective();
-		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-		CanAllBotsReachGoal(goal);
-		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+	float goal[3] = { 1813.1, -2807.8, -141.8 };
 
-		HookSingleEntityOutput(capturepoint, "OnHumanCaptureCompleted", ZPORedQueenR106_OnHackPanelCaptured, true);
-	}
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+	CanAllBotsReachGoal(goal);
+
+	HookSingleEntityOutput(capturepoint, "OnHumanCaptureCompleted", ZPORedQueenR106_OnHackPanelCaptured, true);
 }
 
 static void ZPORedQueenR106_OnHackPanelCaptured(const char[] output, int caller, int activator, float delay)
 {
-	ZPORedQueenR106_ActivateApproachDoor4();
+	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door", "door4");
+
+	if (door == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_redqueen_r106: Failed to find door4 func_door!");
+		return;
+	}
+
+	HookSingleEntityOutput(door, "OnFullyOpen", ZPORedQueenR106_ApproachDoor4End, true);
 }
 
 /**
- * Phase: 4 - ApproachDoor4
- * Summary: Bot moves toward door4 while it opens.
+ * Phase: 4 - ApproachDoor4End
+ * Summary: Wait at door4end until it opens.
  * Entity: func_door
- * Bot action: MOVETO fixed position
- * Confirmation: a timer matched to door4end's scripted open delay
+ * Bot action: MOVETO
+ * Confirmation: door4end fully open
  */
-static void ZPORedQueenR106_ActivateApproachDoor4()
+static void ZPORedQueenR106_ApproachDoor4End(const char[] output, int caller, int activator, float delay)
 {
+	ZPORedQueenR106_ChatMsgSurvivors("Panel hacked, head for the next door!");
+
+	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door", "door4end");
+
+	if (door == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_redqueen_r106: Failed to find door4end func_door!");
+		return;
+	}
+
 	float goal[3] = { 3056.1, -2915.5, -192.0 };
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+	CanAllBotsReachGoal(goal);
 
-	CreateTimer(60.0, ZPORedQueenR106_Timer_Door4EndOpening, .flags = TIMER_FLAG_NO_MAPCHANGE);
-}
-
-static void ZPORedQueenR106_Timer_Door4EndOpening(Handle timer)
-{
-	ZPORedQueenR106_ActivateMoveThroughDoor4End();
+	HookSingleEntityOutput(door, "OnFullyOpen", ZPORedQueenR106_MoveThroughDoor4End, true);
 }
 
 /**
  * Phase: 5 - MoveThroughDoor4End
- * Summary: Bot moves through door4end.
- * Entity: func_door
- * Bot action: MOVETO fixed position
- * Confirmation: none yet - last phase implemented so far
+ * Summary: Move through door4end.
+ * Entity: none
+ * Bot action: MOVETO
+ * Confirmation: none yet
  */
-static void ZPORedQueenR106_ActivateMoveThroughDoor4End()
+static void ZPORedQueenR106_MoveThroughDoor4End(const char[] output, int caller, int activator, float delay)
 {
+	ZPORedQueenR106_ChatMsgSurvivors("The way is open, move through!");
+
 	float goal[3] = { 3931.8, -1725.6, -192.0 };
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+	CanAllBotsReachGoal(goal);
 }
