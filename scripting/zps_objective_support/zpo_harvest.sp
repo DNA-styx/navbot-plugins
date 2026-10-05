@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_harvest map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.32.2
+ * Module version: 0.32.3
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: Usable
@@ -65,7 +65,7 @@ static void ZPOHarvest_DefendTheHouse()
 	{
 		NavBotZPSModInterface.ResetObjective();
 
-		float goal[3] = { 20.5, -88.2, 0.0 };
+		float goal[3] = { 547.3, 736.4, -420.0 };
 
 		CanAllBotsReachGoal(goal);
 		NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
