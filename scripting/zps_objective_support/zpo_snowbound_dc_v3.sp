@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_snowbound_dc_v3 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.4.0
+ * Module version: 0.4.6
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: {good / usable / partially complete / unusable}
@@ -143,7 +143,7 @@ static void ZPOSnowboundDCv3_ActivateDeliverWood(const char[] output, int caller
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveItemSearchID("item_wood");
 	NavBotZPSModInterface.SetObjectiveItemUseTarget(fireplaceReceiver);
-	NavBotZPSModInterface.SetObjectiveDetectionRadius(g_DetectionRadius);
+	NavBotZPSModInterface.SetObjectiveDetectionRadius(128.0);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_DROP_ITEM);
 }
 
@@ -165,7 +165,7 @@ static void ZPOSnowboundDCv3_ActivateHoldPosition(const char[] output, int calle
 		return;
 	}
 
-	HookSingleEntityOutput(timeblockCounter, "OnHitMax", ZPOSnowboundDCv3_ActivateLever, true);
+	HookSingleEntityOutput(timeblockCounter, "OnHitMax", ZPOSnowboundDCv3_ActivateApproachLever, true);
 
 	float goal[3] = { 8188.5, -200.0, 157.0 };
 
@@ -176,12 +176,46 @@ static void ZPOSnowboundDCv3_ActivateHoldPosition(const char[] output, int calle
 
 /**
  * Phase: 5 - ApproachLever
- * Summary: Bots move to the tram_timer_tr zone to force-spawn the CAR1 lever.
+ * Summary: Wait for cable_car_brush to clear before approaching the lever zone.
+ * Entity: logic_relay
+ * Bot action: none (ResetObjective only; bots roam/follow until the brush clears)
+ * Confirmation: tram_delay_0 or tram_delay_1 fires OnTrigger (the map picks one at runtime).
+ */
+static void ZPOSnowboundDCv3_ActivateApproachLever(const char[] output, int caller, int activator, float delay)
+{
+	const int tramDelay0Hammerid = 889151;
+	int tramDelay0 = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "logic_relay", tramDelay0Hammerid);
+
+	if (tramDelay0 == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_snowbound_dc_v3: Failed to find tram_delay_0! Hammer ID: %i", tramDelay0Hammerid);
+		return;
+	}
+
+	HookSingleEntityOutput(tramDelay0, "OnTrigger", ZPOSnowboundDCv3_ActivateApproachLeverZone, true);
+
+	const int tramDelay1Hammerid = 889157;
+	int tramDelay1 = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "logic_relay", tramDelay1Hammerid);
+
+	if (tramDelay1 == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_snowbound_dc_v3: Failed to find tram_delay_1! Hammer ID: %i", tramDelay1Hammerid);
+		return;
+	}
+
+	HookSingleEntityOutput(tramDelay1, "OnTrigger", ZPOSnowboundDCv3_ActivateApproachLeverZoneDelayed, true);
+
+	NavBotZPSModInterface.ResetObjective();
+}
+
+/**
+ * Phase: 6 - ApproachLeverZone
+ * Summary: Move into the tram_timer_tr zone now that cable_car_brush is clear.
  * Entity: point_template
  * Bot action: MOVETO
  * Confirmation: tramlevers_temp fires OnEntitySpawned (Template01, tram1button).
  */
-static void ZPOSnowboundDCv3_ActivateLever(const char[] output, int caller, int activator, float delay)
+static void ZPOSnowboundDCv3_ActivateApproachLeverZone(const char[] output, int caller, int activator, float delay)
 {
 	const int tramleversTempHammerid = 897036;
 	int tramleversTemp = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "point_template", tramleversTempHammerid);
@@ -194,33 +228,50 @@ static void ZPOSnowboundDCv3_ActivateLever(const char[] output, int caller, int 
 
 	HookSingleEntityOutput(tramleversTemp, "OnEntitySpawned", ZPOSnowboundDCv3_ActivateUseLever, true);
 
-	float goal[3] = { 5490.2, -507.3, 160.0 };
+	float goal[3] = { 5864.6, -878.0, 93.5 };
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 }
 
+// tram_delay_1's path disables cable_car_brush 6 seconds after OnTrigger (tram_delay_0's is immediate).
+static void ZPOSnowboundDCv3_ActivateApproachLeverZoneDelayed(const char[] output, int caller, int activator, float delay)
+{
+	CreateTimer(6.0, ZPOSnowboundDCv3_OnApproachLeverZoneDelayExpired, .flags = TIMER_FLAG_NO_MAPCHANGE);
+}
+
+static Action ZPOSnowboundDCv3_OnApproachLeverZoneDelayExpired(Handle timer)
+{
+	const int tramleversTempHammerid = 897036;
+	int tramleversTemp = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "point_template", tramleversTempHammerid);
+
+	if (tramleversTemp == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_snowbound_dc_v3: Failed to find tramlevers_temp! Hammer ID: %i", tramleversTempHammerid);
+		return Plugin_Stop;
+	}
+
+	HookSingleEntityOutput(tramleversTemp, "OnEntitySpawned", ZPOSnowboundDCv3_ActivateUseLever, true);
+
+	float goal[3] = { 5864.6, -878.0, 93.5 };
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+
+	return Plugin_Stop;
+}
+
 /**
- * Phase: 6 - UseLever
- * Summary: Bots pull the CAR1 lever to send the cable car down.
+ * Phase: 7 - UseLever
+ * Summary: Pull the CAR1 lever to send the cable car down.
  * Entity: func_rot_button
  * Bot action: USE_BUTTON
- * Confirmation: tram1filter_delay fires OnPass.
+ * Confirmation: tram1button fires OnPressed.
  */
 static void ZPOSnowboundDCv3_ActivateUseLever(const char[] output, int caller, int activator, float delay)
 {
-	const int filterdelayHammerid = 897371;
-	int filterdelay = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "filter_activator_name", filterdelayHammerid);
-
-	if (filterdelay == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_snowbound_dc_v3: Failed to find tram1filter_delay! Hammer ID: %i", filterdelayHammerid);
-		return;
-	}
-
-	HookSingleEntityOutput(filterdelay, "OnPass", ZPOSnowboundDCv3_ActivateTravel, true);
-
 	const int leverHammerid = 776952;
 	int lever = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_rot_button", leverHammerid);
 
@@ -230,13 +281,15 @@ static void ZPOSnowboundDCv3_ActivateUseLever(const char[] output, int caller, i
 		return;
 	}
 
+	HookSingleEntityOutput(lever, "OnPressed", ZPOSnowboundDCv3_ActivateTravel, true);
+
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveUseButton(lever);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 }
 
 /**
- * Phase: 7 - Travel
+ * Phase: 8 - Travel
  * Summary: Bots move to and hold a position while the cable car descends.
  * Entity: path_track
  * Bot action: MOVETO
@@ -255,7 +308,7 @@ static void ZPOSnowboundDCv3_ActivateTravel(const char[] output, int caller, int
 
 	HookSingleEntityOutput(arrivalNode, "OnPass", ZPOSnowboundDCv3_OnArrivedAtBottomStation, true);
 
-	float goal[3] = { 5699.5, -900.5, 93.5 };
+	float goal[3] = { 5687.9, -872.9, 93.5 };
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
