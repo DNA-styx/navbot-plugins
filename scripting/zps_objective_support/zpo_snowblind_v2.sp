@@ -146,6 +146,7 @@ static void ZPOSnowblindV2_StartTentPhase()
 	float goal[3] = { -183.0, 465.0, -192.0 };
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 }
 
@@ -169,6 +170,7 @@ static void ZPOSnowblindV2_StartLobbyPhase()
 	float goal[3] = { -121.0, -150.0, -190.0 };
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 }
 
@@ -192,6 +194,7 @@ static void ZPOSnowblindV2_StartBasementPhase()
 	float goal[3] = { 250.0, -251.0, -352.0 };
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 }
 
@@ -227,5 +230,6 @@ static void ZPOSnowblindV2_OnRadioPhaseUnlocked(const char[] output, int caller,
 	float goal[3] = { -83.0, -241.0, 80.0 };
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
+	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
 }
