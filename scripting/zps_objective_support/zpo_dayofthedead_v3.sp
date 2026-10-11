@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_dayofthedead_v3 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.3.4
+ * Module version: 0.3.5
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: Usable
@@ -102,9 +102,9 @@ static void ZPODayOfTheDeadV3_OnPowerSwitched(const char[] output, int caller, i
 
 /**
  * Phase: 3 - PressLiftButton
- * Entity: func_button
+ * Entity: func_button / filter_activator_team
  * Bot action: USE_BUTTON
- * Confirmation: the button's OnPressed output
+ * Confirmation: the lift filter's OnPass output
  */
 static void ZPODayOfTheDeadV3_OnCargoDoorOpening(const char[] output, int caller, int activator, float delay)
 {
@@ -120,7 +120,15 @@ static void ZPODayOfTheDeadV3_OnCargoDoorOpening(const char[] output, int caller
 	NavBotZPSModInterface.SetObjectiveUseButton(button);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 
-	HookSingleEntityOutput(button, "OnPressed", ZPODayOfTheDeadV3_OnLiftButtonPressed, true);
+	int filter = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "filter_activator_team", "Elevator_Filter");
+
+	if (filter == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_dayofthedead_v3: Failed to find Elevator_Filter filter_activator_team!");
+		return;
+	}
+
+	HookSingleEntityOutput(filter, "OnPass", ZPODayOfTheDeadV3_OnLiftButtonPressed, true);
 }
 
 /**
