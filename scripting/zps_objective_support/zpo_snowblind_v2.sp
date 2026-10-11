@@ -4,10 +4,10 @@
  * NavBot ZPS objective support module for the zpo_snowblind_v2 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.2.2
+ * Module version: 0.2.5
  * Author: Claude.ai guided by DNA.styx
  *
- * Status: WIP
+ * Status: 
  *
  * Issues: 
  */
@@ -20,6 +20,7 @@
 
 static bool s_ZoneDone[ZONE_COUNT];
 static int s_CurrentZone;
+static bool s_WaitingForRadioDoor;
 
 void ZPOSnowblindV2_Init()
 {
@@ -27,6 +28,7 @@ void ZPOSnowblindV2_Init()
 	s_ZoneDone[ZONE_TENT] = false;
 	s_ZoneDone[ZONE_LOBBY] = false;
 	s_ZoneDone[ZONE_BASEMENT] = false;
+	s_WaitingForRadioDoor = false;
 
 	int tentCapture = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_capturepoint_zp", "area_r01");
 
@@ -59,10 +61,34 @@ void ZPOSnowblindV2_Init()
 	HookSingleEntityOutput(basementCapture, "OnHumanCaptureCompleted", ZPOSnowblindV2_OnBasementCaptured, true);
 
 	CreateTimer(3.0, ZPOSnowblindV2_Timer_StartPool, .flags = TIMER_FLAG_NO_MAPCHANGE);
+
+	int counter = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "math_counter", "objcunt");
+
+	if (counter == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_snowblind_v2: Failed to find objcunt math_counter!");
+		return;
+	}
+
+	HookSingleEntityOutput(counter, "OnHitMax", ZPOSnowblindV2_OnRadioUnlocked, true);
 }
 
 void ZPOSnowblindV2_Think()
 {
+	if (!s_WaitingForRadioDoor)
+	{
+		return;
+	}
+
+	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "prop_door_rotating", "r_3rd_flr_door_new");
+
+	if (door == INVALID_ENT_REFERENCE)
+	{
+		return;
+	}
+
+	s_WaitingForRadioDoor = false;
+	HookSingleEntityOutput(door, "OnFullyOpen", ZPOSnowblindV2_StartRadioPhase, true);
 }
 
 // Helpers used by more than one phase.
@@ -111,7 +137,6 @@ static void ZPOSnowblindV2_AdvancePool()
 	if (remainingCount == 0)
 	{
 		NavBotZPSModInterface.ResetObjective();
-		ZPOSnowblindV2_HookRadioPhase();
 		return;
 	}
 
@@ -203,31 +228,23 @@ static void ZPOSnowblindV2_OnBasementCaptured(const char[] output, int caller, i
 	ZPOSnowblindV2_OnZoneCaptured(ZONE_BASEMENT);
 }
 
-static void ZPOSnowblindV2_HookRadioPhase()
+static void ZPOSnowblindV2_OnRadioUnlocked(const char[] output, int caller, int activator, float delay)
 {
-	int counter = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "math_counter", "objcunt");
-
-	if (counter == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_snowblind_v2: Failed to find objcunt math_counter!");
-		return;
-	}
-
-	HookSingleEntityOutput(counter, "OnHitMax", ZPOSnowblindV2_OnRadioPhaseUnlocked, true);
+	s_WaitingForRadioDoor = true;
 }
 
 /**
  * Phase: 3 - Radio Room
  * Summary: Hold the Radio Room capture zone.
- * Entity: math_counter / trigger_capturepoint_zp
+ * Entity: math_counter / prop_door_rotating / trigger_capturepoint_zp
  * Bot action: MOVETO
  * Confirmation: none, the round ends via the map's own win entity
  */
-static void ZPOSnowblindV2_OnRadioPhaseUnlocked(const char[] output, int caller, int activator, float delay)
+static void ZPOSnowblindV2_StartRadioPhase(const char[] output, int caller, int activator, float delay)
 {
 	ZPOSnowblindV2_ChatMsgSurvivors("We are moving into the Radio Room!");
 
-	float goal[3] = { -83.0, -241.0, 80.0 };
+	float goal[3] = { -75.5, -220.8, 80.0 };
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 	CanAllBotsReachGoal(goal);
