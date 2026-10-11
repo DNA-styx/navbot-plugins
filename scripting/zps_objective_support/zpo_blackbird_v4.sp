@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_blackbird_v4 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.2.8
+ * Module version: 0.2.10
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: {good / usable / partially complete / unusable}
@@ -250,7 +250,7 @@ static void ZPOBlackbird_OnPartsFound(const char[] output, int caller, int activ
 // ActivateFindParts's Confirmation.
 static Action ZPOBlackbird_OnRepairButtonUnlocked(Handle timer)
 {
-	ZPOBlackbird_ActivateRepairTransmitter();
+	ZPOBlackbird_ActivateRepairTransmitter("", INVALID_ENT_REFERENCE, INVALID_ENT_REFERENCE, 0.0);
 	return Plugin_Stop;
 }
 
@@ -262,7 +262,7 @@ static Action ZPOBlackbird_OnRepairButtonUnlocked(Handle timer)
  * Confirmation: repairTimer's OnTimer. repairChk's OnEndTouchAll restarts
  *   it early.
  */
-static void ZPOBlackbird_ActivateRepairTransmitter()
+static void ZPOBlackbird_ActivateRepairTransmitter(const char[] output, int caller, int activator, float delay)
 {
 	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "transmitterRepair");
 
@@ -304,6 +304,7 @@ static void ZPOBlackbird_OnRepairStarted(const char[] output, int caller, int ac
 		return;
 	}
 
+	UnhookSingleEntityOutput(timer, "OnTimer", ZPOBlackbird_ActivateDestroyDoor);
 	HookSingleEntityOutput(timer, "OnTimer", ZPOBlackbird_ActivateDestroyDoor, true);
 
 	int hold = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "repairChk");
@@ -314,13 +315,7 @@ static void ZPOBlackbird_OnRepairStarted(const char[] output, int caller, int ac
 		return;
 	}
 
-	HookSingleEntityOutput(hold, "OnEndTouchAll", ZPOBlackbird_OnRepairInterrupted, true);
-}
-
-// Fires if the bot leaves the hold area early.
-static void ZPOBlackbird_OnRepairInterrupted(const char[] output, int caller, int activator, float delay)
-{
-	ZPOBlackbird_ActivateRepairTransmitter();
+	HookSingleEntityOutput(hold, "OnEndTouchAll", ZPOBlackbird_ActivateRepairTransmitter, true);
 }
 
 // Phase 6 prerequisite - door blocking the radio button.
