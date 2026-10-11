@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_snowbound_dc_v3 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.4.6
+ * Module version: 0.4.7
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: {good / usable / partially complete / unusable}
@@ -140,9 +140,19 @@ static void ZPOSnowboundDCv3_ActivateDeliverWood(const char[] output, int caller
 
 	HookSingleEntityOutput(fireplaceReceiver, "OnItemDelivered", ZPOSnowboundDCv3_ActivateHoldPosition, true);
 
+	const int itemWoodHammerid = 651120;
+	int itemWood = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "item_deliver", itemWoodHammerid);
+
+	if (itemWood == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_snowbound_dc_v3: Failed to find item_wood! Hammer ID: %i", itemWoodHammerid);
+		return;
+	}
+
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveItemSearchID("item_wood");
 	NavBotZPSModInterface.SetObjectiveItemUseTarget(fireplaceReceiver);
+	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(itemWood);
 	NavBotZPSModInterface.SetObjectiveDetectionRadius(128.0);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_DROP_ITEM);
 }
