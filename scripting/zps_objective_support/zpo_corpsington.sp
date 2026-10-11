@@ -3,7 +3,7 @@
  *
  * NavBot ZPS objective support module for the zpo_corpsington map.
  *
- * Module version: 0.13.1
+ * Module version: 0.13.2
  * Author: Claude.ai guided by DNA.styx
  *
  * Status:
@@ -15,6 +15,7 @@ enum
 {
 	ZPOCORP_PHASE_IDLE = 0,
 	ZPOCORP_PHASE_BREAKINTOOFFICE,
+	ZPOCORP_PHASE_WAITFORPOWERTOFAIL,
 	ZPOCORP_PHASE_PUSHGENERATOR,
 	ZPOCORP_PHASE_CLOSEDOORS
 };
@@ -35,6 +36,10 @@ void ZPOCorpsington_Think()
 		case ZPOCORP_PHASE_BREAKINTOOFFICE:
 		{
 			ZPOCorpsington_UpdateBarricadeObjective();
+		}
+		case ZPOCORP_PHASE_WAITFORPOWERTOFAIL:
+		{
+			ZPOCorpsington_UpdateUpperFloorTrigger();
 		}
 		case ZPOCORP_PHASE_PUSHGENERATOR:
 		{
@@ -190,21 +195,13 @@ static void ZPOCorpsington_CutPower(const char[] output, int caller, int activat
 /**
  * Phase: 3 - Wait for power to fail
  * Summary: Hold at the staging position until the container bridge lands.
- * Entity: func_breakable
+ * Entity: trigger_once
  * Bot action: MOVETO
- * Confirmation: The upper floor window glass breaks.
+ * Confirmation: The upper floor trigger is enabled.
  */
 static void ZPOCorpsington_WaitForPowerToFail(const char[] output, int caller, int activator, float delay)
 {
 	ZPOCorpsington_ChatMsgSurvivors("Wait for the power to fail!");
-
-	int glass = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_breakable", "windowGlass");
-
-	if (glass == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_corpsington: Failed to find the windowGlass func_breakable!");
-		return;
-	}
 
 	float goal[3] = { 1800.8, 509.0, 288.1 };
 
@@ -212,7 +209,28 @@ static void ZPOCorpsington_WaitForPowerToFail(const char[] output, int caller, i
 	CanAllBotsReachGoal(goal);
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-	HookSingleEntityOutput(glass, "OnBreak", ZPOCorpsington_GetInsideUpperFloor, true);
+
+	s_CurrentPhase = ZPOCORP_PHASE_WAITFORPOWERTOFAIL;
+}
+
+static void ZPOCorpsington_UpdateUpperFloorTrigger()
+{
+	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_once", "enter_2nd_floor");
+
+	if (trigger == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_corpsington: Failed to find the enter_2nd_floor trigger_once!");
+		s_CurrentPhase = ZPOCORP_PHASE_IDLE;
+		return;
+	}
+
+	if (GetEntProp(trigger, Prop_Data, "m_bDisabled", 1) != 0)
+	{
+		return;
+	}
+
+	s_CurrentPhase = ZPOCORP_PHASE_IDLE;
+	ZPOCorpsington_GetInsideUpperFloor();
 }
 
 /**
@@ -222,7 +240,7 @@ static void ZPOCorpsington_WaitForPowerToFail(const char[] output, int caller, i
  * Bot action: MOVETO
  * Confirmation: The upper floor trigger is touched.
  */
-static void ZPOCorpsington_GetInsideUpperFloor(const char[] output, int caller, int activator, float delay)
+static void ZPOCorpsington_GetInsideUpperFloor()
 {
 	ZPOCorpsington_ChatMsgSurvivors("Cross the container and get inside!");
 
