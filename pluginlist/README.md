@@ -70,3 +70,6 @@ Automatically updates the skill level of in-game bots when the skill ConVar is c
 
 Logs to a file every time a complete path cannot be built. Useful for finding problematic nav meshes.
 
+## Pathfinder
+
+[Go to page.](PATHFINDER.md)
