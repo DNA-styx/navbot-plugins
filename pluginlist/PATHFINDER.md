@@ -7,6 +7,7 @@ A simple fun plugin that allows players to pathfind to other players.
 |Name|Description|Usage|Default Access|
 |:---:|:---:|:---:|:---:|
 |sm_pathfind|Toggles the pathfinding|To enable pathfinding, pass the target player name as the first argument. To disable pathfiding, call without any args.|Cheats|
+|sm_pathfind_admin|Toggles the pathfinding on other palyers|Requires 3 arguments. <Targets> <Pathfind target> <1 = enable, 0 = disable>|Cheats|
 
 ## ConVars
 

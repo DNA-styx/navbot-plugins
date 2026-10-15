@@ -58,6 +58,13 @@ enum struct PlayerData
 	{
 		this.nextupdatetime = GetGameTime() + delay;
 	}
+
+	void EnablePathingTo(int target)
+	{
+		this.pathing = true;
+		this.target = GetClientSerial(target);
+		this.SetNextUpdateTime(0.5);
+	}
 }
 
 int g_laserSprite;
@@ -74,6 +81,7 @@ public void OnPluginStart()
 	LoadTranslations("common.phrases");
 
 	RegAdminCmd("sm_pathfind", CMD_PathFind, ADMFLAG_CHEATS, "Enables pathfinding to a target player.");
+	RegAdminCmd("sm_pathfind_admin", CMD_PathFind_Admin, ADMFLAG_CHEATS, "Enables pathfinding on other players.");
 
 	cvar_max_paths_per_cycle = CreateConVar("sm_pathfinder_max_per_cycle", "2", "Maximum number of players to update per cycle.", FCVAR_NONE, true, 1.0, true, 32.0);
 	cvar_path_frequency = CreateConVar("sm_pathfinder_path_update_frequency", "2.0", "Update an individual player's path every this many seconds.", FCVAR_NONE, true, 0.5);
@@ -201,10 +209,10 @@ Action CMD_PathFind(int client, int args)
 	char arg1[MAX_NAME_LENGTH];
 	GetCmdArg(1, arg1, sizeof(arg1));
 
-	int targets[32];
+	int targets[MAX_TARGET_LENGTH];
 	char tgname[256];
 	bool tn_is_ml = false;
-	int num_targets = ProcessTargetString(arg1, client, targets, sizeof(targets), COMMAND_FILTER_NO_MULTI | COMMAND_FILTER_CONNECTED | COMMAND_FILTER_ALIVE | COMMAND_FILTER_NO_IMMUNITY, tgname, sizeof(tgname), tn_is_ml);
+	int num_targets = ProcessTargetString(arg1, client, targets, sizeof(targets), COMMAND_FILTER_NO_MULTI | COMMAND_FILTER_ALIVE | COMMAND_FILTER_NO_IMMUNITY, tgname, sizeof(tgname), tn_is_ml);
 
 	if (num_targets <= 0)
 	{
@@ -219,13 +227,92 @@ Action CMD_PathFind(int client, int args)
 		return Plugin_Handled;
 	}
 
-	// we only want one target
-	g_data[client].target = GetClientSerial(targets[0]);
-	g_data[client].pathing = true;
-	g_data[client].nextupdatetime = GetGameTime() + 0.5;
+	if (targets[0] == client)
+	{
+		ReplyToCommand(client, "Cannot path to self!");
+		return Plugin_Handled;
+	}
 
-	LogAction(client, targets[0], "%L enabled pathfinding to %L.", client, targets[0]);
-	ShowActivity2(client, "[SM] ", "%N enabled pathfinding to %N.", client, targets[0]);
+	// we only want one target
+	g_data[client].EnablePathingTo(targets[0]);
+	LogAction(client, targets[0], "\"%L\" enabled pathfinding to \"%L\".", client, targets[0]);
+	ShowActivity2(client, "[SM] ", "enabled pathfinding to %N.", targets[0]);
+	return Plugin_Handled;
+}
+
+Action CMD_PathFind_Admin(int client, int args)
+{
+	if (args < 3)
+	{
+		ReplyToCommand(client, "[SM] Usage: sm_pathfind_admin <target> <pathfind target> <1 = enable, 0 = disable>");
+		return Plugin_Handled;
+	}
+
+	char arg1[64], arg2[64];
+	bool enable = GetCmdArgInt(3) != 0;
+	GetCmdArg(1, arg1, sizeof(arg1));
+	GetCmdArg(2, arg2, sizeof(arg2));
+
+	int cmd_targets[MAX_TARGET_LENGTH];
+	char cmd_tgname[MAX_NAME_LENGTH];
+	bool tn_is_ml = false;
+	int cmd_num_targets = ProcessTargetString(arg1, client, cmd_targets, sizeof(cmd_targets), COMMAND_FILTER_NO_BOTS, cmd_tgname, sizeof(cmd_tgname), tn_is_ml);
+
+	if (cmd_num_targets <= 0)
+	{
+		ReplyToTargetError(client, cmd_num_targets);
+		return Plugin_Handled;
+	}
+
+	int path_targets[MAX_TARGET_LENGTH];
+	char path_tgname[MAX_NAME_LENGTH];
+	bool ignored = false;
+	int path_num_targets = ProcessTargetString(arg2, client, path_targets, sizeof(path_targets), COMMAND_FILTER_NO_MULTI | COMMAND_FILTER_ALIVE | COMMAND_FILTER_NO_IMMUNITY, path_tgname, sizeof(path_tgname), ignored);
+
+	if (path_num_targets <= 0)
+	{
+		ReplyToTargetError(client, path_num_targets);
+		return Plugin_Handled;
+	}
+
+	if (path_num_targets > 1)
+	{
+		ReplyToTargetError(client, COMMAND_TARGET_AMBIGUOUS);
+		return Plugin_Handled;
+	}
+
+	int path_target = path_targets[0];
+	char actionname[16];
+	FormatEx(actionname, sizeof(actionname), "%s", enable ? "Enabled" : "Disabled");
+
+	for (int i = 0; i < cmd_num_targets; i++)
+	{
+		if (cmd_targets[i] == path_target)
+		{
+			continue;
+		}
+
+		if (enable)
+		{
+			g_data[cmd_targets[i]].EnablePathingTo(path_target);
+		}
+		else
+		{
+			g_data[cmd_targets[i]].StopPathing();
+		}
+		
+		LogAction(client, cmd_targets[i], "\"%L\" %s pathfinding for \"%L\". Path target: \"%L\".", client, actionname, cmd_targets[i], path_target);
+	}
+
+	if (tn_is_ml)
+	{
+		ShowActivity2(client, "[SM] ", "%s pathfiding to \"%N\" on %t", actionname, path_target, cmd_tgname);
+	}
+	else
+	{
+		ShowActivity2(client, "[SM] ", "%s pathfinding to \"%N\" on %s", actionname, path_target, cmd_tgname);
+	}
+
 	return Plugin_Handled;
 }
 
