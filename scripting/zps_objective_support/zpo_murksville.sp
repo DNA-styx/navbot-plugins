@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_murksville map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.14.0
+ * Module version: 0.16.3
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: WIP
@@ -12,171 +12,398 @@
  * Issues: Survivor bots not pushing cart reliably
  */
 
-enum
-{
-	ZPOMURK_PHASE_WAITFORCART = 0,
-	ZPOMURK_PHASE_WAITFORPUMP,
-	ZPOMURK_PHASE_DONE
-};
-
-static int s_CurrentPhase = ZPOMURK_PHASE_WAITFORCART;
-static float s_LastCartPos[3];
-static bool s_bCartPosKnown;
+static bool s_bWaitingForBoatReady;
 
 void ZPOMurksville_Init()
 {
 	g_ThinkFunc = ZPOMurksville_Think;
-	s_CurrentPhase = ZPOMURK_PHASE_WAITFORCART;
-	s_bCartPosKnown = false;
+	s_bWaitingForBoatReady = false;
 
-	ZPOMurksville_MoveToCart();
-	ZPOMurksville_HookDrainBoatCompletionSignals();
+	ZPOMurksville_PushCart();
 }
 
 void ZPOMurksville_Think()
 {
-	switch (s_CurrentPhase)
+	if (s_bWaitingForBoatReady)
 	{
-		case ZPOMURK_PHASE_WAITFORCART:
+		ZPOMurksville_CheckBoatReady();
+	}
+}
+
+static void ZPOMurksville_ChatMsgSurvivors(const char[] msg)
+{
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (IsClientInGame(client) && GetClientTeam(client) == 2)
 		{
-			ZPOMurksville_UpdateCartTriggerObjective();
-		}
-		case ZPOMURK_PHASE_WAITFORPUMP:
-		{
-			ZPOMurksville_UpdatePumpTriggerObjective();
+			PrintToChat(client, "\x04[NAV]\x01 %s", msg);
 		}
 	}
 }
 
-static void ZPOMurksville_HookDrainBoatCompletionSignals()
+/**
+ * Phase: 0a - DrainBoat (cart stage)
+ * Summary: Push the cart.
+ * Entity: trigger_multiple, func_door_rotating
+ * Bot action: MOVE_TO_ENTITY
+ * Confirmation: the pump door's OnFullyOpen output
+ */
+static void ZPOMurksville_PushCart()
 {
-	int cartTrigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "push_pump_trigger");
+	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "push_pump_trigger");
 
-	if (cartTrigger == INVALID_ENT_REFERENCE)
+	if (trigger == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_murksville: Failed to find the push_pump_trigger trigger_multiple!");
-	}
-	else
-	{
-		HookSingleEntityOutput(cartTrigger, "OnStartTouch", ZPOMurksville_OnCartTriggerTouched, false);
+		LogError("zpo_murksville: Failed to find push_pump_trigger!");
+		return;
 	}
 
 	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door_rotating", "rotatepump");
 
 	if (door == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_murksville: Failed to find the rotatepump func_door_rotating!");
+		LogError("zpo_murksville: Failed to find rotatepump!");
+		return;
 	}
-	else
+
+	ZPOMurksville_ChatMsgSurvivors("Push the cart!");
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+
+	HookSingleEntityOutput(door, "OnFullyOpen", ZPOMurksville_PushPump, true);
+}
+
+/**
+ * Phase: 0b - DrainBoat (pump stage)
+ * Summary: Push the pump.
+ * Entity: trigger_multiple, path_track
+ * Bot action: MOVE_TO_ENTITY
+ * Confirmation: the end path_track's OnPass output
+ */
+static void ZPOMurksville_PushPump(const char[] output, int caller, int activator, float delay)
+{
+	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "push_pump_trigger2");
+
+	if (trigger == INVALID_ENT_REFERENCE)
 	{
-		HookSingleEntityOutput(door, "OnFullyOpen", ZPOMurksville_OnRotatePumpFullyOpen, true);
+		LogError("zpo_murksville: Failed to find push_pump_trigger2!");
+		return;
 	}
 
 	int pathEnd = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "pumppathEnd");
 
 	if (pathEnd == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_murksville: Failed to find the pumppathEnd path_track!");
+		LogError("zpo_murksville: Failed to find pumppathEnd!");
+		return;
 	}
-	else
+
+	ZPOMurksville_ChatMsgSurvivors("Cart's in place, push the pump!");
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+
+	HookSingleEntityOutput(pathEnd, "OnPass", ZPOMurksville_WaitForDrain, true);
+}
+
+/**
+ * Phase: 0c - DrainBoat (draining)
+ * Summary: Roam while the boat drains.
+ * Entity: path_track
+ * Bot action: none
+ * Confirmation: the boat's path_track OnPass output
+ */
+static void ZPOMurksville_WaitForDrain(const char[] output, int caller, int activator, float delay)
+{
+	int boatPath = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "boatpath2");
+
+	if (boatPath == INVALID_ENT_REFERENCE)
 	{
-		HookSingleEntityOutput(pathEnd, "OnPass", ZPOMurksville_OnPumpFinished, true);
+		LogError("zpo_murksville: Failed to find boatpath2!");
+		return;
+	}
+
+	ZPOMurksville_ChatMsgSurvivors("Pump's running, hold out while the boat drains!");
+
+	NavBotZPSModInterface.ResetObjective();
+
+	HookSingleEntityOutput(boatPath, "OnPass", ZPOMurksville_PartsPlaceholder, true);
+}
+
+/**
+ * Phase: 1-3 - FindBoatParts, RetoolParts, BringParts (placeholder)
+ * Summary: Roam while players find, retool and deliver the parts.
+ * Entity: env_entity_maker
+ * Bot action: none
+ * Confirmation: the battery maker's OnEntitySpawned output
+ */
+static void ZPOMurksville_PartsPlaceholder(const char[] output, int caller, int activator, float delay)
+{
+	int maker = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "env_entity_maker", "-MakerBattery");
+
+	if (maker == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_murksville: Failed to find -MakerBattery!");
+		return;
+	}
+
+	ZPOMurksville_ChatMsgSurvivors("Find the boat parts and get them retooled, we'll cover you!");
+
+	NavBotZPSModInterface.ResetObjective();
+
+	HookSingleEntityOutput(maker, "OnEntitySpawned", ZPOMurksville_GetBattery, true);
+}
+
+/**
+ * Phase: 4 - FindBattery
+ * Summary: Pick up the battery.
+ * Entity: item_deliver, env_entity_maker
+ * Bot action: USE_BUTTON
+ * Confirmation: the battery's OnItemTaken output
+ */
+static void ZPOMurksville_GetBattery(const char[] output, int caller, int activator, float delay)
+{
+	int battery = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "item_deliver", "BatteryDeliver");
+
+	if (battery == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_murksville: Failed to find BatteryDeliver!");
+		return;
+	}
+
+	int maker = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "env_entity_maker", "-MakerKeys");
+
+	if (maker == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_murksville: Failed to find -MakerKeys!");
+		return;
+	}
+
+	ZPOMurksville_ChatMsgSurvivors("Get the battery!");
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveUseButton(battery);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
+
+	HookSingleEntityOutput(battery, "OnItemTaken", ZPOMurksville_BringBattery, true);
+	HookSingleEntityOutput(maker, "OnEntitySpawned", ZPOMurksville_GetKeys, true);
+}
+
+/**
+ * Phase: 5 - BringBattery
+ * Summary: Take the battery to the boat.
+ * Entity: trigger_multiple
+ * Bot action: USE_ITEM
+ * Confirmation: the keys maker's OnEntitySpawned output
+ */
+static void ZPOMurksville_BringBattery(const char[] output, int caller, int activator, float delay)
+{
+	int boat = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "testBoat");
+
+	if (boat == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_murksville: Failed to find testBoat!");
+		return;
+	}
+
+	ZPOMurksville_ChatMsgSurvivors("Got the battery, take it to the boat!");
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveItemSearchID("BatteryDeliver");
+	NavBotZPSModInterface.SetObjectiveItemUseTarget(boat);
+	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(caller);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_ITEM);
+}
+
+/**
+ * Phase: 6 - FindKeys
+ * Summary: Pick up the keys.
+ * Entity: item_deliver, point_template
+ * Bot action: USE_BUTTON
+ * Confirmation: the gas station template's OnEntitySpawned output
+ */
+static void ZPOMurksville_GetKeys(const char[] output, int caller, int activator, float delay)
+{
+	int keys = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "item_deliver", "KeysDeliver");
+
+	if (keys == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_murksville: Failed to find KeysDeliver!");
+		return;
+	}
+
+	int temp = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "point_template", "-Temp_SDH");
+
+	if (temp == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_murksville: Failed to find -Temp_SDH!");
+		return;
+	}
+
+	ZPOMurksville_ChatMsgSurvivors("Get the keys!");
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveUseButton(keys);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
+
+	HookSingleEntityOutput(temp, "OnEntitySpawned", ZPOMurksville_UnlockGasGate, true);
+}
+
+/**
+ * Phase: 7a - RefuelBoat (gas gate)
+ * Summary: Use the keys on the gas gate.
+ * Entity: trigger_useable, func_door_rotating
+ * Bot action: USE_ITEM
+ * Confirmation: the gas door's OnFullyOpen output
+ */
+static void ZPOMurksville_UnlockGasGate(const char[] output, int caller, int activator, float delay)
+{
+	int keys = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "item_deliver", "KeysDeliver");
+
+	if (keys == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_murksville: Failed to find KeysDeliver!");
+		return;
+	}
+
+	int useable = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_useable", "gasDoorUseable");
+
+	if (useable == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_murksville: Failed to find gasDoorUseable!");
+		return;
+	}
+
+	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door_rotating", "gasDoor");
+
+	if (door == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_murksville: Failed to find gasDoor!");
+		return;
+	}
+
+	ZPOMurksville_ChatMsgSurvivors("Got the keys, unlock the gas gate!");
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveItemSearchID("KeysDeliver");
+	NavBotZPSModInterface.SetObjectiveItemUseTarget(useable);
+	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(keys);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_ITEM);
+
+	HookSingleEntityOutput(door, "OnFullyOpen", ZPOMurksville_Refuel, true);
+}
+
+/**
+ * Phase: 7b - RefuelBoat (pump)
+ * Summary: Start refuelling.
+ * Entity: func_button
+ * Bot action: USE_BUTTON
+ * Confirmation: the gas button's OnPressed output
+ */
+static void ZPOMurksville_Refuel(const char[] output, int caller, int activator, float delay)
+{
+	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "gasButton");
+
+	if (button == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_murksville: Failed to find gasButton!");
+		return;
+	}
+
+	ZPOMurksville_ChatMsgSurvivors("Gate's open, start refuelling!");
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveUseButton(button);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
+
+	HookSingleEntityOutput(button, "OnPressed", ZPOMurksville_BoardBoat, true);
+}
+
+/**
+ * Phase: 7c - RefuelBoat (board)
+ * Summary: Board the boat while it refuels.
+ * Entity: func_button
+ * Bot action: MOVE_TO_ENTITY
+ * Confirmation: the boat button unlocks (polled)
+ */
+static void ZPOMurksville_BoardBoat(const char[] output, int caller, int activator, float delay)
+{
+	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "boatButton");
+
+	if (button == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_murksville: Failed to find boatButton!");
+		return;
+	}
+
+	ZPOMurksville_ChatMsgSurvivors("Refuelling, get on the boat!");
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(button);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+
+	s_bWaitingForBoatReady = true;
+}
+
+static void ZPOMurksville_CheckBoatReady()
+{
+	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "boatButton");
+
+	if (button == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_murksville: Failed to find boatButton!");
+		s_bWaitingForBoatReady = false;
+		return;
+	}
+
+	if (GetEntProp(button, Prop_Data, "m_bLocked") == 0)
+	{
+		s_bWaitingForBoatReady = false;
+		ZPOMurksville_StartBoat(button);
 	}
 }
 
 /**
- * Phase: 0a - DrainBoat (cart stage)
- * Summary: Bots stand in the cart-push trigger; the cart advances based on
- *   player count. An initial MOVETO fires in Init(), then again on
- *   confirmed touch or when the trigger's position has moved.
- * Entity: trigger_multiple
- * Bot action: MOVETO
- * Confirmation: rotatepump fully opens
+ * Phase: 8a - StartBoat
+ * Summary: Start the boat.
+ * Entity: func_button
+ * Bot action: USE_BUTTON
+ * Confirmation: the boat button's OnPressed output
  */
-static void ZPOMurksville_MoveToCart()
+static void ZPOMurksville_StartBoat(int button)
 {
-	float goal[3] = { 192.5, -99.1, -592.0 };
+	ZPOMurksville_ChatMsgSurvivors("Boat's ready, start it up!");
 
 	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-	CanAllBotsReachGoal(goal);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+	NavBotZPSModInterface.SetObjectiveUseButton(button);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 
-	s_LastCartPos = goal;
-	s_bCartPosKnown = true;
-}
-
-static void ZPOMurksville_OnCartTriggerTouched(const char[] output, int caller, int activator, float delay)
-{
-	float pos[3];
-	GetEntPropVector(caller, Prop_Data, "m_vecAbsOrigin", pos);
-
-	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveMoveGoal(pos);
-	CanAllBotsReachGoal(pos);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-
-	s_LastCartPos = pos;
-	s_bCartPosKnown = true;
-}
-
-static void ZPOMurksville_UpdateCartTriggerObjective()
-{
-	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "push_pump_trigger");
-
-	if (trigger != INVALID_ENT_REFERENCE)
-	{
-		float pos[3];
-		GetEntPropVector(trigger, Prop_Data, "m_vecAbsOrigin", pos);
-
-		bool moved = !s_bCartPosKnown || pos[0] != s_LastCartPos[0] || pos[1] != s_LastCartPos[1] || pos[2] != s_LastCartPos[2];
-
-		if (moved)
-		{
-			NavBotZPSModInterface.ResetObjective();
-			NavBotZPSModInterface.SetObjectiveMoveGoal(pos);
-			CanAllBotsReachGoal(pos);
-			NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-
-			s_LastCartPos = pos;
-			s_bCartPosKnown = true;
-		}
-	}
-}
-
-static void ZPOMurksville_OnRotatePumpFullyOpen(const char[] output, int caller, int activator, float delay)
-{
-	s_CurrentPhase = ZPOMURK_PHASE_WAITFORPUMP;
+	HookSingleEntityOutput(button, "OnPressed", ZPOMurksville_Escape, true);
 }
 
 /**
- * Phase: 0b - DrainBoat (pump stage)
- * Summary: Same shape as 0a, second trigger/cart pair.
+ * Phase: 8b - Escape
+ * Summary: Stay on the boat.
  * Entity: trigger_multiple
- * Bot action: MOVETO
- * Confirmation: pump cart reaches the end of its track
+ * Bot action: MOVE_TO_ENTITY
+ * Confirmation: none (round ends)
  */
-static void ZPOMurksville_UpdatePumpTriggerObjective()
+static void ZPOMurksville_Escape(const char[] output, int caller, int activator, float delay)
 {
-	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "push_pump_trigger2");
+	int boat = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "testBoat");
 
-	if (trigger != INVALID_ENT_REFERENCE)
+	if (boat == INVALID_ENT_REFERENCE)
 	{
-		float pos[3];
-		GetEntPropVector(trigger, Prop_Data, "m_vecAbsOrigin", pos);
-
-		NavBotZPSModInterface.ResetObjective();
-		NavBotZPSModInterface.SetObjectiveMoveGoal(pos);
-		CanAllBotsReachGoal(pos);
-		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+		LogError("zpo_murksville: Failed to find testBoat!");
+		return;
 	}
-}
 
-static void ZPOMurksville_OnPumpFinished(const char[] output, int caller, int activator, float delay)
-{
+	ZPOMurksville_ChatMsgSurvivors("We're leaving, stay on the boat!");
+
 	NavBotZPSModInterface.ResetObjective();
-
-	s_CurrentPhase = ZPOMURK_PHASE_DONE;
-
-	//TODO: Phase 1 - FindBoatParts
+	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(boat);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
 }
