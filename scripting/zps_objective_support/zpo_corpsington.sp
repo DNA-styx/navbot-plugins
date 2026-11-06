@@ -3,7 +3,7 @@
  *
  * NavBot ZPS objective support module for the zpo_corpsington map.
  *
- * Module version: 0.13.2
+ * Module version: 0.14.1
  * Author: Claude.ai guided by DNA.styx
  *
  * Status:
@@ -11,44 +11,21 @@
  * Issues:
  */
 
-enum
-{
-	ZPOCORP_PHASE_IDLE = 0,
-	ZPOCORP_PHASE_BREAKINTOOFFICE,
-	ZPOCORP_PHASE_WAITFORPOWERTOFAIL,
-	ZPOCORP_PHASE_PUSHGENERATOR,
-	ZPOCORP_PHASE_CLOSEDOORS
-};
-
-static int s_CurrentPhase = ZPOCORP_PHASE_IDLE;
+static bool s_PollBarricades = false;
 
 void ZPOCorpsington_Init()
 {
 	g_ThinkFunc = ZPOCorpsington_Think;
+	s_PollBarricades = false;
 
 	ZPOCorpsington_BreakIntoOffice();
 }
 
 void ZPOCorpsington_Think()
 {
-	switch (s_CurrentPhase)
+	if (s_PollBarricades)
 	{
-		case ZPOCORP_PHASE_BREAKINTOOFFICE:
-		{
-			ZPOCorpsington_UpdateBarricadeObjective();
-		}
-		case ZPOCORP_PHASE_WAITFORPOWERTOFAIL:
-		{
-			ZPOCorpsington_UpdateUpperFloorTrigger();
-		}
-		case ZPOCORP_PHASE_PUSHGENERATOR:
-		{
-			ZPOCorpsington_UpdateToolButtonObjective();
-		}
-		case ZPOCORP_PHASE_CLOSEDOORS:
-		{
-			ZPOCorpsington_UpdateCloseDoorsObjective();
-		}
+		ZPOCorpsington_UpdateBarricadeObjective();
 	}
 }
 
@@ -74,8 +51,6 @@ static void ZPOCorpsington_BreakIntoOffice()
 {
 	ZPOCorpsington_ChatMsgSurvivors("Break the barricades on the office door!");
 
-	s_CurrentPhase = ZPOCORP_PHASE_IDLE;
-
 	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door_rotating", "breakdoor1");
 
 	if (door == INVALID_ENT_REFERENCE)
@@ -86,7 +61,7 @@ static void ZPOCorpsington_BreakIntoOffice()
 
 	HookSingleEntityOutput(door, "OnFullyOpen", ZPOCorpsington_OpenWarehouse, true);
 
-	s_CurrentPhase = ZPOCORP_PHASE_BREAKINTOOFFICE;
+	s_PollBarricades = true;
 	ZPOCorpsington_UpdateBarricadeObjective();
 }
 
@@ -125,7 +100,7 @@ static void ZPOCorpsington_UpdateBarricadeObjective()
  */
 static void ZPOCorpsington_OpenWarehouse(const char[] output, int caller, int activator, float delay)
 {
-	s_CurrentPhase = ZPOCORP_PHASE_IDLE;
+	s_PollBarricades = false;
 
 	ZPOCorpsington_ChatMsgSurvivors("Open the warehouse door!");
 
@@ -189,60 +164,19 @@ static void ZPOCorpsington_CutPower(const char[] output, int caller, int activat
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(entity);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_DESTROY_ENTITY);
-	HookSingleEntityOutput(entity, "OnBreak", ZPOCorpsington_WaitForPowerToFail, true);
+	HookSingleEntityOutput(entity, "OnBreak", ZPOCorpsington_GetInsideUpperFloor, true);
 }
 
 /**
- * Phase: 3 - Wait for power to fail
- * Summary: Hold at the staging position until the container bridge lands.
+ * Phase: 3/4 - Wait for power to fail / Get inside upper floor
+ * Summary: Cross the container bridge into the upper floor once it lands.
  * Entity: trigger_once
- * Bot action: MOVETO
- * Confirmation: The upper floor trigger is enabled.
- */
-static void ZPOCorpsington_WaitForPowerToFail(const char[] output, int caller, int activator, float delay)
-{
-	ZPOCorpsington_ChatMsgSurvivors("Wait for the power to fail!");
-
-	float goal[3] = { 1800.8, 509.0, 288.1 };
-
-	NavBotZPSModInterface.ResetObjective();
-	CanAllBotsReachGoal(goal);
-	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-
-	s_CurrentPhase = ZPOCORP_PHASE_WAITFORPOWERTOFAIL;
-}
-
-static void ZPOCorpsington_UpdateUpperFloorTrigger()
-{
-	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_once", "enter_2nd_floor");
-
-	if (trigger == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_corpsington: Failed to find the enter_2nd_floor trigger_once!");
-		s_CurrentPhase = ZPOCORP_PHASE_IDLE;
-		return;
-	}
-
-	if (GetEntProp(trigger, Prop_Data, "m_bDisabled", 1) != 0)
-	{
-		return;
-	}
-
-	s_CurrentPhase = ZPOCORP_PHASE_IDLE;
-	ZPOCorpsington_GetInsideUpperFloor();
-}
-
-/**
- * Phase: 4 - Get inside upper floor
- * Summary: Cross the container bridge into the upper floor.
- * Entity: trigger_once
- * Bot action: MOVETO
+ * Bot action: MOVE_TO_ENTITY
  * Confirmation: The upper floor trigger is touched.
  */
-static void ZPOCorpsington_GetInsideUpperFloor()
+static void ZPOCorpsington_GetInsideUpperFloor(const char[] output, int caller, int activator, float delay)
 {
-	ZPOCorpsington_ChatMsgSurvivors("Cross the container and get inside!");
+	ZPOCorpsington_ChatMsgSurvivors("Wait for the power to fail, then cross the container!");
 
 	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_once", "enter_2nd_floor");
 
@@ -252,21 +186,18 @@ static void ZPOCorpsington_GetInsideUpperFloor()
 		return;
 	}
 
-	float goal[3] = { 1582.3, 1367.7, 288.0 };
-
 	NavBotZPSModInterface.ResetObjective();
-	CanAllBotsReachGoal(goal);
-	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
 	HookSingleEntityOutput(trigger, "OnStartTouch", ZPOCorpsington_PushGenerator, true);
 }
 
 /**
  * Phase: 5/6 - Get to street / Push generator
- * Summary: Stay with the generator cart, then pull its lever.
- * Entity: func_button
- * Bot action: MOVETO, then USE_BUTTON
- * Confirmation: The lever is pressed.
+ * Summary: Stay with the generator cart until it reaches the end of the track.
+ * Entity: func_button / path_track
+ * Bot action: MOVE_TO_ENTITY
+ * Confirmation: The cart passes path30.
  */
 static void ZPOCorpsington_PushGenerator(const char[] output, int caller, int activator, float delay)
 {
@@ -280,93 +211,103 @@ static void ZPOCorpsington_PushGenerator(const char[] output, int caller, int ac
 		return;
 	}
 
+	int track = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "path30");
+
+	if (track == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_corpsington: Failed to find the path30 path_track!");
+		return;
+	}
+
 	HookSingleEntityOutput(button, "OnPressed", ZPOCorpsington_CloseDoors, true);
 
-	s_CurrentPhase = ZPOCORP_PHASE_PUSHGENERATOR;
-	ZPOCorpsington_UpdateToolButtonObjective();
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(button);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	HookSingleEntityOutput(track, "OnPass", ZPOCorpsington_PullLever, true);
 }
 
-static void ZPOCorpsington_UpdateToolButtonObjective()
+/**
+ * Phase: 6.1 - Pull lever
+ * Summary: Pull the generator lever.
+ * Entity: func_button
+ * Bot action: USE_BUTTON
+ * Confirmation: The lever is pressed.
+ */
+static void ZPOCorpsington_PullLever(const char[] output, int caller, int activator, float delay)
 {
+	ZPOCorpsington_ChatMsgSurvivors("The generator is in place, pull the lever!");
+
 	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "toolButton");
 
 	if (button == INVALID_ENT_REFERENCE)
 	{
 		LogError("zpo_corpsington: Failed to find the toolButton func_button!");
-		s_CurrentPhase = ZPOCORP_PHASE_IDLE;
 		return;
 	}
-
-	if (GetEntProp(button, Prop_Data, "m_bLocked", 1) != 0)
-	{
-		float pos[3];
-		GetEntPropVector(button, Prop_Data, "m_vecAbsOrigin", pos);
-
-		NavBotZPSModInterface.ResetObjective();
-		CanAllBotsReachGoal(pos);
-		NavBotZPSModInterface.SetObjectiveMoveGoal(pos);
-		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-		return;
-	}
-
-	ZPOCorpsington_ChatMsgSurvivors("The generator is in place, pull the lever!");
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveUseButton(button);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
-
-	s_CurrentPhase = ZPOCORP_PHASE_IDLE;
 }
 
 /**
  * Phase: 7 - Close doors
- * Summary: Press the safehouse door button once it unlocks.
- * Entity: func_button
- * Bot action: USE_BUTTON
- * Confirmation: The button is pressed.
+ * Summary: Wait at the safehouse door button until the safehouse opens.
+ * Entity: func_button / func_door
+ * Bot action: MOVE_TO_ENTITY
+ * Confirmation: The safehouse door starts opening.
  */
 static void ZPOCorpsington_CloseDoors(const char[] output, int caller, int activator, float delay)
 {
 	ZPOCorpsington_ChatMsgSurvivors("Get into the safehouse and close the doors!");
 
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_NONE);
-	NavBotZPSModInterface.ResetObjective();
-
 	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "safehouse_button");
 
 	if (button == INVALID_ENT_REFERENCE)
 	{
 		LogError("zpo_corpsington: Failed to find the safehouse_button func_button!");
-		s_CurrentPhase = ZPOCORP_PHASE_IDLE;
+		return;
+	}
+
+	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door", "safehouse_door");
+
+	if (door == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_corpsington: Failed to find the safehouse_door func_door!");
 		return;
 	}
 
 	HookSingleEntityOutput(button, "OnPressed", ZPOCorpsington_KillZombies, true);
 
-	s_CurrentPhase = ZPOCORP_PHASE_CLOSEDOORS;
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(button);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	HookSingleEntityOutput(door, "OnOpen", ZPOCorpsington_PressSafehouseButton, true);
 }
 
-static void ZPOCorpsington_UpdateCloseDoorsObjective()
+/**
+ * Phase: 7.1 - Press safehouse button
+ * Summary: Press the safehouse door button.
+ * Entity: func_button
+ * Bot action: USE_BUTTON
+ * Confirmation: The button is pressed.
+ */
+static void ZPOCorpsington_PressSafehouseButton(const char[] output, int caller, int activator, float delay)
 {
+	ZPOCorpsington_ChatMsgSurvivors("The safehouse is open, press the button!");
+
 	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "safehouse_button");
 
 	if (button == INVALID_ENT_REFERENCE)
 	{
 		LogError("zpo_corpsington: Failed to find the safehouse_button func_button!");
-		s_CurrentPhase = ZPOCORP_PHASE_IDLE;
-		return;
-	}
-
-	if (GetEntProp(button, Prop_Data, "m_bLocked", 1) != 0)
-	{
 		return;
 	}
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveUseButton(button);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
-
-	s_CurrentPhase = ZPOCORP_PHASE_IDLE;
 }
 
 /**
