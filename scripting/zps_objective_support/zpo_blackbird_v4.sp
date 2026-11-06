@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_blackbird_v4 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.2.10
+ * Module version: 0.3.1
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: {good / usable / partially complete / unusable}
@@ -13,12 +13,16 @@
  */
 
 static bool s_bPollingDoorDestroyed;
+static bool s_bCratesPushed;
+static bool s_bUnitPushed;
 
 void ZPOBlackbird_Init()
 {
 	g_ThinkFunc = ZPOBlackbird_Think;
 
 	s_bPollingDoorDestroyed = false;
+	s_bCratesPushed = false;
+	s_bUnitPushed = false;
 
 	ZPOBlackbird_ActivateGetInside();
 }
@@ -374,8 +378,112 @@ static void ZPOBlackbird_ActivateCallForHelp()
 	HookSingleEntityOutput(button, "OnPressed", ZPOBlackbird_OnHelpCalled, true);
 }
 
-// Confirms Phase 6.
 static void ZPOBlackbird_OnHelpCalled(const char[] output, int caller, int activator, float delay)
+{
+	NavBotZPSModInterface.ResetObjective();
+
+	int relay = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "logic_relay", "currentPath_relay");
+
+	if (relay == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_blackbird_v4: Failed to find currentPath_relay logic_relay!");
+		return;
+	}
+
+	HookSingleEntityOutput(relay, "OnTrigger", ZPOBlackbird_ActivatePushCrates, true);
+}
+
+/**
+ * Phase: 7 - Push the crates
+ * Summary: Push the crates to the roof edge.
+ * Entity: trigger_multiple, path_track
+ * Bot action: MOVE_TO_ENTITY
+ * Confirmation: crates_path5's OnPass.
+ */
+static void ZPOBlackbird_ActivatePushCrates(const char[] output, int caller, int activator, float delay)
+{
+	int cratesEnd = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "crates_path5");
+
+	if (cratesEnd == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_blackbird_v4: Failed to find crates_path5 path_track!");
+		return;
+	}
+
+	HookSingleEntityOutput(cratesEnd, "OnPass", ZPOBlackbird_ActivatePushUnit, true);
+
+	int unitEnd = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "unit_path5");
+
+	if (unitEnd == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_blackbird_v4: Failed to find unit_path5 path_track!");
+		return;
+	}
+
+	HookSingleEntityOutput(unitEnd, "OnPass", ZPOBlackbird_OnUnitPushed, true);
+
+	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "pushCrateTrigger");
+
+	if (trigger == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_blackbird_v4: Failed to find pushCrateTrigger trigger_multiple!");
+		return;
+	}
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+}
+
+/**
+ * Phase: 8 - Push the unit
+ * Summary: Push the unit to block the ladder.
+ * Entity: trigger_multiple, path_track
+ * Bot action: MOVE_TO_ENTITY
+ * Confirmation: unit_path5's OnPass.
+ */
+static void ZPOBlackbird_ActivatePushUnit(const char[] output, int caller, int activator, float delay)
+{
+	s_bCratesPushed = true;
+
+	if (s_bUnitPushed)
+	{
+		ZPOBlackbird_ClearRoof();
+		return;
+	}
+
+	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "pushUnitTrigger");
+
+	if (trigger == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_blackbird_v4: Failed to find pushUnitTrigger trigger_multiple!");
+		return;
+	}
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+}
+
+// Fires when the unit reaches the end of its track.
+static void ZPOBlackbird_OnUnitPushed(const char[] output, int caller, int activator, float delay)
+{
+	s_bUnitPushed = true;
+
+	if (s_bCratesPushed)
+	{
+		ZPOBlackbird_ClearRoof();
+	}
+}
+
+/**
+ * Phase: 9 - Clear the roof
+ * Summary: Roam and kill zombies.
+ * Entity: none
+ * Bot action: none (objective reset)
+ * Confirmation: The round ends.
+ */
+static void ZPOBlackbird_ClearRoof()
 {
 	NavBotZPSModInterface.ResetObjective();
 }
