@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_harvest map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.32.3
+ * Module version: 0.33.0
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: Usable
@@ -424,21 +424,25 @@ static void ZPOHarvest_OnDefendBarnEnd(const char[] output, int caller, int acti
 
 /**
  * Phase: 12 - Escape
- * Summary: Move to the pickup point for the human-win condition.
- * Entity: game_win_human
- * Bot action: MOVETO the win trigger's position
- * Confirmation: none (round ends once the rescue truck passes with
- *   survivors present)
+ * Summary: Move to the escape trigger on the rescue truck.
+ * Entity: trigger_escape
+ * Bot action: MOVE_TO_ENTITY
+ * Confirmation: none (round ends once survivors escape on the rescue truck)
  */
 static void ZPOHarvest_OnSearchlightPressed(const char[] output, int caller, int activator, float delay)
 {
 	ZPOHarvest_ChatMsgSurvivors("Lights are on, let's move!");
 
-	NavBotZPSModInterface.ResetObjective();
+	int escape = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_escape", "gamewinhuman");
 
-	float goal[3] = { 3432.0, -1027.0, -477.0 };
-
-	CanAllBotsReachGoal(goal);
-	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+	if (escape != INVALID_ENT_REFERENCE)
+	{
+		NavBotZPSModInterface.ResetObjective();
+		NavBotZPSModInterface.SetObjectiveGenericTargetEntity(escape);
+		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	}
+	else
+	{
+		LogError("zpo_harvest: Failed to find gamewinhuman!");
+	}
 }
