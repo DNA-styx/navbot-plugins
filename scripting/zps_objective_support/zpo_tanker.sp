@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_tanker map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.31.3
+ * Module version: 0.31.5
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: {good / usable / partially complete / unusable}
@@ -385,7 +385,7 @@ static void ZPOTanker_OnHatchButtonPressed(const char[] output, int caller, int 
  * Phase: 8 - EscapeToBoats
  * Summary: Press lifeboat button until engine starts. Shortly after the
  *   first survivor touches Hint-Trigger, all zombies are killed so they
- *   respawn at the final deck spawns.
+ *   respawn at the final deck spawns near the boats.
  * Entity: func_button / trigger_once
  * Bot action: USE_BUTTON
  * Confirmation: Button's name changing to "Zero".
