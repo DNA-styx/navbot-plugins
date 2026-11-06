@@ -31,7 +31,6 @@ float g_DetectionRadius;
 #include "zps_objective_support/zpo_murksville.sp"
 #include "zps_objective_support/zpo_zomboeing.sp"
 #include "zps_objective_support/zpo_terminal_vf1.sp"
-#include "zps_objective_support/zpo_redqueen_r106.sp"
 #include "zps_objective_support/zpo_gasdump_nf1.sp"
 #include "zps_objective_support/zpo_area41_v7f.sp"
 #include "zps_objective_support/zpo_dayofthedead_v3.sp"
@@ -42,6 +41,8 @@ float g_DetectionRadius;
 #include "zps_objective_support/zpo_noexit_h2.sp"
 #include "zps_objective_support/zpo_hoarfrost_b1_b2.sp"
 #include "zps_objective_support/zpo_shreddingfield.sp"
+#include "zps_objective_support/zpo_residentevil_mov_zb_dc6.sp"
+#include "zps_objective_support/zpo_ancient_h1.sp"
 #include "zps_objective_support/common.sp"
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)

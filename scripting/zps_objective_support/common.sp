@@ -25,6 +25,8 @@ enum ZPOMap
 	MAP_ZPO_NOEXIT_H2,
 	MAP_ZPO_HOARFROST_B1_B2,
 	MAP_ZPO_SHREDDINGFIELD,
+	MAP_ZPO_RESIDENTEVIL_MOV_ZB_DC6,
+	MAP_ZPO_ANCIENT_H1,
 }
 
 static ZPOMap s_detectedMap = MAP_UNKNOWN;
@@ -77,10 +79,6 @@ void DetectObjectiveMap()
 	{
 		s_detectedMap = MAP_ZPO_TERMINAL_VF1;
 	}
-	else if (strcmp(map, "zpo_redqueen_r106") == 0)
-	{
-		s_detectedMap = MAP_ZPO_REDQUEEN_R106;
-	}
 	else if (strcmp(map, "zpo_gasdump_nf1") == 0)
 	{
 		s_detectedMap = MAP_ZPO_GASDUMP_NF1;
@@ -120,6 +118,14 @@ void DetectObjectiveMap()
 	else if (strcmp(map, "zpo_shreddingfield") == 0)
 	{
 		s_detectedMap = MAP_ZPO_SHREDDINGFIELD;
+	}
+	else if (strcmp(map, "zpo_residentevil_mov_zb_dc6") == 0)
+	{
+		s_detectedMap = MAP_ZPO_RESIDENTEVIL_MOV_ZB_DC6;
+	}
+	else if (strcmp(map, "zpo_ancient_h1") == 0)
+	{
+		s_detectedMap = MAP_ZPO_ANCIENT_H1;
 	}
 	else
 	{
@@ -178,10 +184,6 @@ void InitObjectives()
 		{
 			ZPOTerminal_Init();
 		}
-		case MAP_ZPO_REDQUEEN_R106:
-		{
-			ZPORedQueenR106_Init();
-		}
 		case MAP_ZPO_GASDUMP_NF1:
 		{
 			ZPOGasdumpNF1_Init();
@@ -221,6 +223,14 @@ void InitObjectives()
 		case MAP_ZPO_SHREDDINGFIELD:
 		{
 			ZPOShreddingfield_Init();
+		}
+		case MAP_ZPO_RESIDENTEVIL_MOV_ZB_DC6:
+		{
+			ZPOResidentEvilDC6_Init();
+		}
+		case MAP_ZPO_ANCIENT_H1:
+		{
+			ZPOAncientH1_Init();
 		}
 		default:
 		{
