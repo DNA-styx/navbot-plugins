@@ -1,0 +1,30 @@
+"Phrases"
+{
+	"Callout_Msg"
+	{
+		// 1: translated enemy name
+		// 2: place name (no translations for now)
+		"#format"		"{1:s},{2:s}"
+		"en"			"Enemy {1} at {2}!"
+	}
+
+	// Enemy names
+	// The format is enemy_<entity classname>
+
+	"enemy_player"
+	{
+		"en"			"Player"
+	}
+	"enemy_obj_sentrygun"
+	{
+		"en"			"Sentry Gun"
+	}
+	"enemy_obj_dispenser"
+	{
+		"en"			"Dispenser"
+	}
+	"enemy_obj_teleporter"
+	{
+		"en"			"Teleporter"
+	}
+}
