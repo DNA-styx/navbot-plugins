@@ -14,7 +14,6 @@ enum ZPOMap
 	MAP_ZPO_MURKSVILLE,
 	MAP_ZPO_ZOMBOEING,
 	MAP_ZPO_TERMINAL_VF1,
-	MAP_ZPO_REDQUEEN_R106,
 	MAP_ZPO_GASDUMP_NF1,
 	MAP_ZPO_AREA41_V7F,
 	MAP_ZPO_DAYOFTHEDEAD_V3,
@@ -27,6 +26,9 @@ enum ZPOMap
 	MAP_ZPO_SHREDDINGFIELD,
 	MAP_ZPO_RESIDENTEVIL_MOV_ZB_DC6,
 	MAP_ZPO_ANCIENT_H1,
+	MAP_ZPO_TOMMIPANIC_ZB_V12,
+	MAP_ZPO_SUBWAY,
+	MAP_ZPO_SILENT_SKIES_REMASTERED_V5,
 }
 
 static ZPOMap s_detectedMap = MAP_UNKNOWN;
@@ -126,6 +128,18 @@ void DetectObjectiveMap()
 	else if (strcmp(map, "zpo_ancient_h1") == 0)
 	{
 		s_detectedMap = MAP_ZPO_ANCIENT_H1;
+	}
+	else if (strcmp(map, "zpo_tommipanic_zb_v12") == 0)
+	{
+		s_detectedMap = MAP_ZPO_TOMMIPANIC_ZB_V12;
+	}
+	else if (strcmp(map, "zpo_subway") == 0)
+	{
+		s_detectedMap = MAP_ZPO_SUBWAY;
+	}
+	else if (strcmp(map, "zpo_silent_skies_remastered_v5") == 0)
+	{
+		s_detectedMap = MAP_ZPO_SILENT_SKIES_REMASTERED_V5;
 	}
 	else
 	{
@@ -231,6 +245,18 @@ void InitObjectives()
 		case MAP_ZPO_ANCIENT_H1:
 		{
 			ZPOAncientH1_Init();
+		}
+		case MAP_ZPO_TOMMIPANIC_ZB_V12:
+		{
+			ZPOTommiPanic_Init();
+		}
+		case MAP_ZPO_SUBWAY:
+		{
+			ZPOSubway_Init();
+		}
+		case MAP_ZPO_SILENT_SKIES_REMASTERED_V5:
+		{
+			ZPOSilentSkiesRemasteredV5_Init();
 		}
 		default:
 		{
