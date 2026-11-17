@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_area41_v7f map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.8.1
+ * Module version: 0.8.2
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: Partially complete
@@ -117,7 +117,7 @@ static void ZPOArea41V7F_OnFlushButtonPressed(const char[] output, int caller, i
  * Summary: Get on the lift.
  * Entity: func_tracktrain, func_door
  * Bot action: MOVE_TO_ENTITY
- * Confirmation: the lift gate's OnOpen
+ * Confirmation: the lift gate's OnFullyOpen
  */
 static void ZPOArea41V7F_OnElevatorAtTop(const char[] output, int caller, int activator, float delay)
 {
@@ -143,7 +143,7 @@ static void ZPOArea41V7F_OnElevatorAtTop(const char[] output, int caller, int ac
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(lift);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
 
-	HookSingleEntityOutput(gate, "OnOpen", ZPOArea41V7F_OnElevatorAtBottom, true);
+	HookSingleEntityOutput(gate, "OnFullyOpen", ZPOArea41V7F_OnElevatorAtBottom, true);
 }
 
 /**
