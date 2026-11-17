@@ -10,8 +10,11 @@ The plugin only supports games with two teams.
 
 ## NavBot Quota
 
-Adds a bot quota system.    
-A config file will be auto generated in `cfg/sourcemod`.    
+[Go to page.](BOT_QUOTA.md) 
+
+## NavBot Quota Module: Ignore Spectators
+
+[Go to page.](QUOTA_MODULE_IGNORE_SPEC.md) 
 
 ## NavBot Hearing
 
@@ -73,3 +76,7 @@ Logs to a file every time a complete path cannot be built. Useful for finding pr
 ## Pathfinder
 
 [Go to page.](PATHFINDER.md)
+
+## NavBot Callouts
+
+[Go to page.](BOT_CALLOUTS.md)
