@@ -3,7 +3,7 @@
  *
  * NavBot ZPS objective support module for the zpo_corpsington map.
  *
- * Module version: 0.14.1
+ * Module version: 0.14.2
  * Author: Claude.ai guided by DNA.styx
  *
  * Status:
@@ -11,22 +11,18 @@
  * Issues:
  */
 
-static bool s_PollBarricades = false;
+static const int s_BarricadeHammerIDs[] = { 908234, 908281, 908312 };
 
 void ZPOCorpsington_Init()
 {
 	g_ThinkFunc = ZPOCorpsington_Think;
-	s_PollBarricades = false;
 
 	ZPOCorpsington_BreakIntoOffice();
 }
 
 void ZPOCorpsington_Think()
 {
-	if (s_PollBarricades)
-	{
-		ZPOCorpsington_UpdateBarricadeObjective();
-	}
+
 }
 
 static void ZPOCorpsington_ChatMsgSurvivors(const char[] msg)
@@ -61,34 +57,41 @@ static void ZPOCorpsington_BreakIntoOffice()
 
 	HookSingleEntityOutput(door, "OnFullyOpen", ZPOCorpsington_OpenWarehouse, true);
 
-	s_PollBarricades = true;
-	ZPOCorpsington_UpdateBarricadeObjective();
-}
-
-static void ZPOCorpsington_UpdateBarricadeObjective()
-{
-	static int s_CurrentBarricadeRef = INVALID_ENT_REFERENCE;
-
-	if (s_CurrentBarricadeRef != INVALID_ENT_REFERENCE && EntRefToEntIndex(s_CurrentBarricadeRef) != INVALID_ENT_REFERENCE)
+	for (int i = 0; i < sizeof(s_BarricadeHammerIDs); i++)
 	{
-		return;
-	}
-
-	static const int barricadeHammerIDs[] = { 908234, 908281, 908312 };
-
-	for (int i = 0; i < sizeof(barricadeHammerIDs); i++)
-	{
-		int entity = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "prop_physics_multiplayer", barricadeHammerIDs[i]);
+		int entity = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "prop_physics_multiplayer", s_BarricadeHammerIDs[i]);
 
 		if (entity != INVALID_ENT_REFERENCE)
 		{
-			s_CurrentBarricadeRef = EntIndexToEntRef(entity);
-			NavBotZPSModInterface.ResetObjective();
+			HookSingleEntityOutput(entity, "OnBreak", ZPOCorpsington_OnBarricadeBroken, true);
+		}
+	}
+
+	ZPOCorpsington_UpdateBarricadeObjective(INVALID_ENT_REFERENCE);
+}
+
+static void ZPOCorpsington_OnBarricadeBroken(const char[] output, int caller, int activator, float delay)
+{
+	ZPOCorpsington_UpdateBarricadeObjective(caller);
+}
+
+static void ZPOCorpsington_UpdateBarricadeObjective(int broken)
+{
+	NavBotZPSModInterface.ResetObjective();
+
+	for (int i = 0; i < sizeof(s_BarricadeHammerIDs); i++)
+	{
+		int entity = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "prop_physics_multiplayer", s_BarricadeHammerIDs[i]);
+
+		if (entity != INVALID_ENT_REFERENCE && entity != broken)
+		{
 			NavBotZPSModInterface.SetObjectiveGenericTargetEntity(entity);
 			NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_DESTROY_ENTITY);
 			return;
 		}
 	}
+
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_NONE);
 }
 
 /**
@@ -100,8 +103,6 @@ static void ZPOCorpsington_UpdateBarricadeObjective()
  */
 static void ZPOCorpsington_OpenWarehouse(const char[] output, int caller, int activator, float delay)
 {
-	s_PollBarricades = false;
-
 	ZPOCorpsington_ChatMsgSurvivors("Open the warehouse door!");
 
 	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "wh_button");
