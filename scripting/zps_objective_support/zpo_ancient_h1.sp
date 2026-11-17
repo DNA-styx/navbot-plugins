@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_ancient_h1 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.4.0
+ * Module version: 0.5.1
  * Author: Claude.ai guided by DNA.styx
  *
  * Status:
@@ -110,6 +110,9 @@ static void ZPOAncientH1_BreakBarricades(const char[] output, int caller, int ac
  * Bot action: MOVETO (the valve needs +USE held; USE_ITEM presses once)
  * Confirmation: A survivor passes through Green Door 1.
  */
+// NavBot's USE_BUTTON hold support for momentary_rot_button cannot be used here:
+// the valve's momentary_rot_button is not usable directly (no Use Activates, not solid)
+// and is turned only through an item-gated trigger_useable, which USE_ITEM presses once.
 static void ZPOAncientH1_GreenDoor1(const char[] output, int caller, int activator, float delay)
 {
 	int upper = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "prop_physics", ZPOANCIENTH1_BOARD_UPPER);
@@ -318,6 +321,9 @@ static void ZPOAncientH1_PullLever(const char[] output, int caller, int activato
  * Bot action: none (the valve needs +USE held; USE_ITEM presses once)
  * Confirmation: A survivor passes through Green Door 2.
  */
+// NavBot's USE_BUTTON hold support for momentary_rot_button cannot be used here:
+// the valve's momentary_rot_button is not usable directly (no Use Activates, not solid)
+// and is turned only through an item-gated trigger_useable, which USE_ITEM presses once.
 static void ZPOAncientH1_GreenDoor2(const char[] output, int caller, int activator, float delay)
 {
 	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_once", "survivor_trigger2");
