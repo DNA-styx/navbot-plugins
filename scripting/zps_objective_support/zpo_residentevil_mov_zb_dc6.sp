@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_residentevil_mov_zb_dc6 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.3.0
+ * Module version: 0.5.1
  * Author: Claude.ai guided by DNA.styx
  *
  * Status:
@@ -16,18 +16,26 @@
 // function is static void.
 
 static bool s_bTrainStarted;
+static int s_ChamberBotUserId;
+static int s_ChamberButtonRef = INVALID_ENT_REFERENCE;
+static bool s_bChamberButtonLocked;
+static bool s_bChamberButtonSeenLocked;
 
 void ZPOResidentEvilDC6_Init()
 {
 	g_ThinkFunc = ZPOResidentEvilDC6_Think;
 	s_bTrainStarted = false;
+	s_ChamberBotUserId = 0;
+	s_ChamberButtonRef = INVALID_ENT_REFERENCE;
+	s_bChamberButtonLocked = false;
+	s_bChamberButtonSeenLocked = false;
 
 	ZPOResidentEvilDC6_HackPanel();
 }
 
 void ZPOResidentEvilDC6_Think()
 {
-	// Left empty until a phase needs per-tick polling.
+	ZPOResidentEvilDC6_CheckChamberButton();
 }
 
 static void ZPOResidentEvilDC6_ChatMsgSurvivors(const char[] msg)
@@ -38,6 +46,50 @@ static void ZPOResidentEvilDC6_ChatMsgSurvivors(const char[] msg)
 		{
 			PrintToChat(client, "\x04[NAV]\x01 %s", msg);
 		}
+	}
+}
+
+static NavBot ZPOResidentEvilDC6_GetChamberBot(int client)
+{
+	if (client <= 0 || !IsClientInGame(client) || !NavBotManager.IsNavBot(client))
+	{
+		return NULL_NAVBOT;
+	}
+
+	if (GetClientTeam(client) != 2 || !IsPlayerAlive(client))
+	{
+		return NULL_NAVBOT;
+	}
+
+	return NavBotManager.GetNavBotByIndex(client);
+}
+
+// Sends the chamber bot to press the given button. The first alive survivor
+// bot becomes the chamber bot on the first call; later calls use only that bot.
+static void ZPOResidentEvilDC6_SendChamberPress(int button)
+{
+	NavBot bot = NULL_NAVBOT;
+
+	if (s_ChamberBotUserId != 0)
+	{
+		bot = ZPOResidentEvilDC6_GetChamberBot(GetClientOfUserId(s_ChamberBotUserId));
+	}
+	else
+	{
+		for (int client = 1; client <= MaxClients && bot == NULL_NAVBOT; client++)
+		{
+			bot = ZPOResidentEvilDC6_GetChamberBot(client);
+
+			if (bot != NULL_NAVBOT)
+			{
+				s_ChamberBotUserId = GetClientUserId(client);
+			}
+		}
+	}
+
+	if (bot != NULL_NAVBOT)
+	{
+		bot.SendPluginCommand(NAVBOT_PLUGINCMD_USE_ENTITY, button);
 	}
 }
 
@@ -334,7 +386,7 @@ static void ZPOResidentEvilDC6_HackDoor(const char[] output, int caller, int act
 
 /**
  * Phase: 5 - Open chamber
- * Summary: One survivor bot presses the chamber button.
+ * Summary: Chamber bot moves to the chamber button and presses it once it unlocks.
  * Entity: func_button
  * Bot action: Plugin command USE_ENTITY (single bot)
  * Confirmation: The chamber button is pressed.
@@ -354,221 +406,61 @@ static void ZPOResidentEvilDC6_OpenChamber(const char[] output, int caller, int 
 	NavBotZPSModInterface.ResetObjective();
 	HookSingleEntityOutput(button, "OnPressed", ZPOResidentEvilDC6_SurviveAttack, true);
 	ZPOResidentEvilDC6_SendChamberPress(button);
-	CreateTimer(5.0, ZPOResidentEvilDC6_RepressChamber, EntIndexToEntRef(button), TIMER_FLAG_NO_MAPCHANGE);
+
+	s_ChamberButtonRef = EntIndexToEntRef(button);
+	s_bChamberButtonLocked = GetEntProp(button, Prop_Data, "m_bLocked") != 0;
+	s_bChamberButtonSeenLocked = s_bChamberButtonLocked;
+	LogDebugMessage("ResidentEvilDC6: Chamber button locked at Phase 5 start: %d", s_bChamberButtonLocked);
 }
 
-static void ZPOResidentEvilDC6_SendChamberPress(int button)
+static void ZPOResidentEvilDC6_CheckChamberButton()
 {
-	for (int client = 1; client <= MaxClients; client++)
+	if (s_ChamberButtonRef == INVALID_ENT_REFERENCE)
 	{
-		if (!IsClientInGame(client) || !NavBotManager.IsNavBot(client))
-		{
-			continue;
-		}
-
-		if (GetClientTeam(client) != 2 || !IsPlayerAlive(client))
-		{
-			continue;
-		}
-
-		NavBot bot = NavBotManager.GetNavBotByIndex(client);
-
-		if (bot == NULL_NAVBOT)
-		{
-			continue;
-		}
-
-		bot.SendPluginCommand(NAVBOT_PLUGINCMD_USE_ENTITY, button);
 		return;
 	}
-}
 
-static Action ZPOResidentEvilDC6_RepressChamber(Handle timer, int ref)
-{
-	int button = EntRefToEntIndex(ref);
+	int button = EntRefToEntIndex(s_ChamberButtonRef);
 
-	if (button != INVALID_ENT_REFERENCE)
+	if (button == INVALID_ENT_REFERENCE)
 	{
-		ZPOResidentEvilDC6_SendChamberPress(button);
+		s_ChamberButtonRef = INVALID_ENT_REFERENCE;
+		return;
 	}
 
-	return Plugin_Stop;
+	bool locked = GetEntProp(button, Prop_Data, "m_bLocked") != 0;
+
+	if (locked == s_bChamberButtonLocked)
+	{
+		return;
+	}
+
+	s_bChamberButtonLocked = locked;
+	LogDebugMessage("ResidentEvilDC6: Chamber button locked changed to: %d", locked);
+
+	if (locked)
+	{
+		s_bChamberButtonSeenLocked = true;
+		return;
+	}
+
+	if (s_bChamberButtonSeenLocked)
+	{
+		s_ChamberButtonRef = INVALID_ENT_REFERENCE;
+		ZPOResidentEvilDC6_SendChamberPress(button);
+	}
 }
 
 /**
  * Phase: 5.1 - Survive attack
  * Summary: Roam while the laser defense runs.
- * Entity: func_door_rotating
+ * Entity: none
  * Bot action: None (ResetObjective)
- * Confirmation: The Red Queen chamber door starts to open.
+ * Confirmation: none yet (last phase).
  */
 static void ZPOResidentEvilDC6_SurviveAttack(const char[] output, int caller, int activator, float delay)
 {
-	int door = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_door_rotating", "redqueen_door2");
-
-	if (door == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_residentevil_mov_zb_dc6: Failed to find func_door_rotating! Name: redqueen_door2");
-		return;
-	}
-
 	ZPOResidentEvilDC6_ChatMsgSurvivors("Lasers! Survive the attack!");
 
 	NavBotZPSModInterface.ResetObjective();
-	HookSingleEntityOutput(door, "OnOpen", ZPOResidentEvilDC6_EnterChamber, true);
-}
-
-/**
- * Phase: 6 - Enter chamber
- * Summary: Move to the Red Queen hatch.
- * Entity: info_beacon, trigger_once
- * Bot action: MOVE_TO_ENTITY
- * Confirmation: A survivor reaches the hatch.
- */
-static void ZPOResidentEvilDC6_EnterChamber(const char[] output, int caller, int activator, float delay)
-{
-	int beacon = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "info_beacon", "rqb");
-
-	if (beacon == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_residentevil_mov_zb_dc6: Failed to find info_beacon! Name: rqb");
-		return;
-	}
-
-	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_once", "hatch_doors_open_trigger");
-
-	if (trigger == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_residentevil_mov_zb_dc6: Failed to find trigger_once! Name: hatch_doors_open_trigger");
-		return;
-	}
-
-	ZPOResidentEvilDC6_ChatMsgSurvivors("Chamber is open, get to the Red Queen!");
-
-	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(beacon);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
-	HookSingleEntityOutput(trigger, "OnTrigger", ZPOResidentEvilDC6_WaitForEMP, true);
-}
-
-/**
- * Phase: 6.1 - Wait for EMP
- * Summary: Roam until the EMP button appears.
- * Entity: point_template
- * Bot action: None (ResetObjective)
- * Confirmation: The EMP button is spawned.
- */
-static void ZPOResidentEvilDC6_WaitForEMP(const char[] output, int caller, int activator, float delay)
-{
-	int temp = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "point_template", "pb_temp");
-
-	if (temp == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_residentevil_mov_zb_dc6: Failed to find point_template! Name: pb_temp");
-		return;
-	}
-
-	ZPOResidentEvilDC6_ChatMsgSurvivors("Hold on, the Red Queen is rising!");
-
-	NavBotZPSModInterface.ResetObjective();
-	HookSingleEntityOutput(temp, "OnEntitySpawned", ZPOResidentEvilDC6_InstallEMP, true);
-}
-
-/**
- * Phase: 6.2 - Install EMP
- * Summary: Install the EMP device.
- * Entity: func_button
- * Bot action: USE_BUTTON
- * Confirmation: The EMP button is pressed.
- */
-static void ZPOResidentEvilDC6_InstallEMP(const char[] output, int caller, int activator, float delay)
-{
-	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "part_button");
-
-	if (button == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_residentevil_mov_zb_dc6: Failed to find func_button! Name: part_button");
-		return;
-	}
-
-	ZPOResidentEvilDC6_ChatMsgSurvivors("Install the EMP device!");
-
-	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveUseButton(button);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
-	HookSingleEntityOutput(button, "OnPressed", ZPOResidentEvilDC6_ShutdownRedQueen, true);
-}
-
-/**
- * Phase: 6.3 - Shutdown Red Queen
- * Summary: Deactivate the Red Queen.
- * Entity: func_button
- * Bot action: USE_BUTTON
- * Confirmation: The deactivate button is pressed.
- */
-static void ZPOResidentEvilDC6_ShutdownRedQueen(const char[] output, int caller, int activator, float delay)
-{
-	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "redqueens_last_words");
-
-	if (button == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_residentevil_mov_zb_dc6: Failed to find func_button! Name: redqueens_last_words");
-		return;
-	}
-
-	ZPOResidentEvilDC6_ChatMsgSurvivors("EMP installed, shut down the Red Queen!");
-
-	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveUseButton(button);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
-	HookSingleEntityOutput(button, "OnPressed", ZPOResidentEvilDC6_FindKeycard, true);
-}
-
-/**
- * Phase: 7 - Find keycard
- * Summary: Find the utility access keycard.
- * Entity: func_button
- * Bot action: USE_BUTTON
- * Confirmation: The keycard is picked up.
- */
-static void ZPOResidentEvilDC6_FindKeycard(const char[] output, int caller, int activator, float delay)
-{
-	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "keycard_button");
-
-	if (button == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_residentevil_mov_zb_dc6: Failed to find func_button! Name: keycard_button");
-		return;
-	}
-
-	ZPOResidentEvilDC6_ChatMsgSurvivors("Red Queen is down, find the utility keycard!");
-
-	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveUseButton(button);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
-	HookSingleEntityOutput(button, "OnPressed", ZPOResidentEvilDC6_ReactivateRedQueen, true);
-}
-
-/**
- * Phase: 8 - Reactivate Red Queen
- * Summary: Reboot the Red Queen mainframe.
- * Entity: func_button
- * Bot action: USE_BUTTON
- * Confirmation: The reactivate button is pressed.
- */
-static void ZPOResidentEvilDC6_ReactivateRedQueen(const char[] output, int caller, int activator, float delay)
-{
-	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "reactivate");
-
-	if (button == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_residentevil_mov_zb_dc6: Failed to find func_button! Name: reactivate");
-		return;
-	}
-
-	ZPOResidentEvilDC6_ChatMsgSurvivors("Keycard found! Get back and reactivate the Red Queen!");
-
-	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveUseButton(button);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 }
