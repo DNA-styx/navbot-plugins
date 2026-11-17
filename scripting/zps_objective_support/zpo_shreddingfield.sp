@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_shreddingfield map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.2.9
+ * Module version: 0.2.10
  * Author: Claude.ai guided by DNA.styx
  *
  * Status:
@@ -163,7 +163,7 @@ static void ZPOShreddingfield_ActivateGearUp()
 
 /**
  * Phase: 1 - Open Supermarket Door
- * Summary: Randomly use either the wd button or the side door button then door.
+ * Summary: Press the wd button; a human opening the side door also counts.
  * Entity: func_button, prop_door_rotating
  * Bot action: USE_BUTTON
  * Confirmation: the wd button is pressed or the side door opens
@@ -171,10 +171,9 @@ static void ZPOShreddingfield_ActivateGearUp()
 static void ZPOShreddingfield_ActivateOpenWD(const char[] output, int caller, int activator, float delay)
 {
 	int wdButton = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", 3516314);
-	int sideButton = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", 6844470);
 	int sideDoor = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "prop_door_rotating", 690175);
 
-	// Hook both routes so whichever entrance opens first starts the food phase.
+	// Hook both entrances so whichever opens first starts the food phase.
 	if (wdButton != INVALID_ENT_REFERENCE)
 	{
 		HookSingleEntityOutput(wdButton, "OnPressed", ZPOShreddingfield_OnEntranceOpened, true);
@@ -185,53 +184,15 @@ static void ZPOShreddingfield_ActivateOpenWD(const char[] output, int caller, in
 		HookSingleEntityOutput(sideDoor, "OnOpen", ZPOShreddingfield_OnEntranceOpened, true);
 	}
 
-	bool useSide = (sideButton != INVALID_ENT_REFERENCE && sideDoor != INVALID_ENT_REFERENCE);
-
-	if (useSide && wdButton != INVALID_ENT_REFERENCE)
+	if (wdButton == INVALID_ENT_REFERENCE)
 	{
-		useSide = GetRandomInt(0, 1) == 1;
-	}
-
-	if (useSide)
-	{
-		NavBotZPSModInterface.ResetObjective();
-		NavBotZPSModInterface.SetObjectiveUseButton(sideButton);
-		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
-
-		HookSingleEntityOutput(sideButton, "OnPressed", ZPOShreddingfield_OnSideButtonPressed, true);
+		// wd button already used, so the market is open.
+		ZPOShreddingfield_StartFoodGathering();
 		return;
 	}
 
-	if (wdButton != INVALID_ENT_REFERENCE)
-	{
-		NavBotZPSModInterface.ResetObjective();
-		NavBotZPSModInterface.SetObjectiveUseButton(wdButton);
-		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
-		return;
-	}
-
-	// Both buttons already used, so the market is open.
-	ZPOShreddingfield_StartFoodGathering();
-}
-
-static void ZPOShreddingfield_OnSideButtonPressed(const char[] output, int caller, int activator, float delay)
-{
-	if (s_bFoodStarted)
-	{
-		return;
-	}
-
-	int sideDoor = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "prop_door_rotating", 690175);
-
-	if (sideDoor == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_shreddingfield: Failed to find side door d! Hammer ID: 690175");
-		return;
-	}
-
-	// The script unlocks d 0.4s after the press; bots retry until it opens.
 	NavBotZPSModInterface.ResetObjective();
-	NavBotZPSModInterface.SetObjectiveUseButton(sideDoor);
+	NavBotZPSModInterface.SetObjectiveUseButton(wdButton);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 }
 
