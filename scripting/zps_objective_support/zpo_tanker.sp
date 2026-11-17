@@ -4,14 +4,13 @@
  * NavBot ZPS objective support module for the zpo_tanker map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.31.5
+ * Module version: 0.31.9
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: {good / usable / partially complete / unusable}
  *
- * Issues: PumpDoor1 (Phase 2) is sometimes not found by ActivatePlantC4,
- *   cause unconfirmed. GuardC4 (Phase 3) has no way to hold a bot in
- *   place, so a human is required to complete C4 arming.
+ * Issues: GuardC4 (Phase 3) has no way to hold a bot in place, so a human
+ *   is required to complete C4 arming.
  */
 
 static bool s_bPCP1Destroyed;
@@ -21,7 +20,8 @@ static bool s_bAccessCodeButtonHooked;
 static bool s_bKeypadButtonHooked;
 static bool s_bHatchButtonHooked;
 static bool s_bLifeboat1Launched;
-static bool s_bZombiesKilled;
+static bool s_bBotsKilled;
+static bool s_bWaitingForArmTrigger;
 static int s_iRoundSerial;
 
 void ZPOTanker_Init()
@@ -35,15 +35,17 @@ void ZPOTanker_Init()
 	s_bKeypadButtonHooked = false;
 	s_bHatchButtonHooked = false;
 	s_bLifeboat1Launched = false;
-	s_bZombiesKilled = false;
+	s_bBotsKilled = false;
+	s_bWaitingForArmTrigger = false;
 	s_iRoundSerial++;
 
-	ZPOTanker_HookHintKill();
+	ZPOTanker_HookIslandKill();
 	ZPOTanker_ActivateInvestigate();
 }
 
 void ZPOTanker_Think()
 {
+	ZPOTanker_PollArmTrigger();
 	ZPOTanker_PollAccessCodeButton();
 	ZPOTanker_PollKeypadButton();
 	ZPOTanker_PollHatchButton();
@@ -54,17 +56,11 @@ void ZPOTanker_Think()
  * Phase: 0 - Investigate
  * Summary: Bots are sent to the room's entrance
  * Entity: trigger_once
- * Bot action: MOVETO
+ * Bot action: MOVE_TO_ENTITY
  * Confirmation: OnStartTouch.
  */
 static void ZPOTanker_ActivateInvestigate()
 {
-	float goal[3] = { 4124.0, -5782.0, 414.0 };
-
-	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
-	CanAllBotsReachGoal(goal);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
-
 	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_once", "Investigate-Trigger");
 
 	if (trigger == INVALID_ENT_REFERENCE)
@@ -72,6 +68,10 @@ static void ZPOTanker_ActivateInvestigate()
 		LogError("zpo_tanker: Failed to find Investigate-Trigger!");
 		return;
 	}
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
 
 	HookSingleEntityOutput(trigger, "OnStartTouch", ZPOTanker_ActivateDestroyPCP, true);
 }
@@ -173,45 +173,41 @@ static void ZPOTanker_OnPCPBreak(const char[] output, int caller, int activator,
 
 /**
  * Phase: 2 - PlantC4
- * Summary: Bots press the button once the pump door opens.
- * Entity: func_button
- * Bot action: USE_BUTTON.
- * Confirmation: PumpDoor1's OnOpen starts the phase; C4-Button's OnPressed
- *   completes it.
+ * Summary: Plant the C4.
+ * Entity: trigger_multiple, func_button
+ * Bot action: USE_BUTTON
+ * Confirmation: the C4 arm trigger is enabled, then the C4 button is pressed.
  */
 static void ZPOTanker_ActivatePlantC4()
 {
-	int door = INVALID_ENT_REFERENCE;
-	int maxEntities = GetMaxEntities();
+	NavBotZPSModInterface.ResetObjective();
 
-	for (int i = 1; i <= maxEntities; i++)
+	s_bWaitingForArmTrigger = true;
+}
+
+static void ZPOTanker_PollArmTrigger()
+{
+	if (!s_bWaitingForArmTrigger)
 	{
-		if (!IsValidEntity(i))
-		{
-			continue;
-		}
-
-		char name[32];
-		GetEntPropString(i, Prop_Data, "m_iName", name, sizeof(name));
-
-		if (StrEqual(name, "PumpDoor1"))
-		{
-			door = i;
-			break;
-		}
-	}
-
-	if (door == INVALID_ENT_REFERENCE)
-	{
-		LogError("zpo_tanker: Failed to find PumpDoor1!");
 		return;
 	}
 
-	HookSingleEntityOutput(door, "OnOpen", ZPOTanker_OnPumpDoor1Open, true);
-}
+	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "C4-ArmTrigger");
 
-static void ZPOTanker_OnPumpDoor1Open(const char[] output, int caller, int activator, float delay)
-{
+	// Removed by the map once arming completes.
+	if (trigger == INVALID_ENT_REFERENCE)
+	{
+		s_bWaitingForArmTrigger = false;
+		return;
+	}
+
+	if (GetEntProp(trigger, Prop_Data, "m_bDisabled") != 0)
+	{
+		return;
+	}
+
+	s_bWaitingForArmTrigger = false;
+
 	int button = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "C4-Button");
 
 	if (button == INVALID_ENT_REFERENCE)
@@ -383,10 +379,8 @@ static void ZPOTanker_OnHatchButtonPressed(const char[] output, int caller, int 
 
 /**
  * Phase: 8 - EscapeToBoats
- * Summary: Press lifeboat button until engine starts. Shortly after the
- *   first survivor touches Hint-Trigger, all zombies are killed so they
- *   respawn at the final deck spawns near the boats.
- * Entity: func_button / trigger_once
+ * Summary: Press lifeboat button until engine starts.
+ * Entity: func_button
  * Bot action: USE_BUTTON
  * Confirmation: Button's name changing to "Zero".
  */
@@ -406,36 +400,45 @@ static void ZPOTanker_ActivateEscapeToBoats()
 	}
 }
 
-// Hooked from Init() so the kill does not depend on Hatch-Button's OnPressed.
-// The .as script switches to ZS-LowerDeck-Final / ZS-UppedDeck-Final 0.5s after
-// the first survivor touches Hint-Trigger; the kill is delayed until after that.
-static void ZPOTanker_HookHintKill()
+// Hooked from Init() so the kill does not depend on earlier phase hooks.
+// The .as script only switches zombies to the water spawns (ZombieSpawns(6))
+// when a survivor touches Island-Trigger; the kill is delayed until after that.
+static void ZPOTanker_HookIslandKill()
 {
-	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_once", "Hint-Trigger");
+	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "Island-Trigger");
 
 	if (trigger == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_tanker: Failed to find Hint-Trigger!");
+		LogError("zpo_tanker: Failed to find Island-Trigger!");
 		return;
 	}
 
-	HookSingleEntityOutput(trigger, "OnStartTouch", ZPOTanker_OnHintTriggered, true);
+	HookSingleEntityOutput(trigger, "OnStartTouch", ZPOTanker_OnIslandTouched, false);
 }
 
-static void ZPOTanker_OnHintTriggered(const char[] output, int caller, int activator, float delay)
+static void ZPOTanker_OnIslandTouched(const char[] output, int caller, int activator, float delay)
 {
-	CreateTimer(2.0, ZPOTanker_Timer_KillZombies, s_iRoundSerial, TIMER_FLAG_NO_MAPCHANGE);
+	if (s_bBotsKilled)
+	{
+		return;
+	}
+
+	if (activator < 1 || activator > MaxClients || !IsClientInGame(activator) || GetClientTeam(activator) != 2)
+	{
+		return;
+	}
+
+	s_bBotsKilled = true;
+	CreateTimer(1.0, ZPOTanker_Timer_KillBots, s_iRoundSerial, TIMER_FLAG_NO_MAPCHANGE);
 }
 
-static Action ZPOTanker_Timer_KillZombies(Handle timer, int roundSerial)
+static Action ZPOTanker_Timer_KillBots(Handle timer, int roundSerial)
 {
 	// Ignore a timer left over from a previous round.
-	if (roundSerial != s_iRoundSerial || s_bZombiesKilled)
+	if (roundSerial != s_iRoundSerial)
 	{
 		return Plugin_Stop;
 	}
-
-	s_bZombiesKilled = true;
 
 	// Silence the per-player slay announcements, then restore the setting.
 	ConVar showActivity = FindConVar("sm_show_activity");
@@ -445,12 +448,14 @@ static Action ZPOTanker_Timer_KillZombies(Handle timer, int roundSerial)
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (!IsClientInGame(i))
+		if (!IsClientInGame(i) || !IsFakeClient(i))
 		{
 			continue;
 		}
 
-		if (GetClientTeam(i) != 3)
+		int team = GetClientTeam(i);
+
+		if (team != 2 && team != 3)
 		{
 			continue;
 		}
@@ -493,7 +498,9 @@ static void ZPOTanker_PollLifeboat1Launch()
 /**
  * Phase: 9 - ReachIsland
  * Summary: The bot is carried to the island automatically by the boat,
- *   then moves further inland.
+ *   then moves further inland. 1s after the first survivor touches
+ *   Island-Trigger, all bots on both teams are killed; zombies respawn at
+ *   the water spawns between the boats and the island.
  * Entity: trigger_multiple
  * Bot action: MOVETO once the island is reached.
  * Confirmation: OnStartTouch.
