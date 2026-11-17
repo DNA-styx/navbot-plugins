@@ -4,7 +4,7 @@
 	{
 		// 1: translated enemy name
 		// 2: place name (no translations for now)
-		"#format"		"{1:s},{2:s}"
+		"#format"		"{1:t},{2:s}"
 		"en"			"Enemy {1} at {2}!"
 	}
 
