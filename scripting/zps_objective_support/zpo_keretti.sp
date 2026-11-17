@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_keretti map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.12.3
+ * Module version: 0.13.0
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: {good / usable / partially complete / unusable}
@@ -22,6 +22,7 @@
 static bool s_FilesPhaseActive = false;
 static int s_CurrentPhase = PHASE_MINEDOOR;
 static bool s_MineDoorDone = false;
+static bool s_WarehouseButtonPressed = false;
 static bool s_WarehouseDoorDone = false;
 static bool s_RadioButtonPressed = false;
 static bool s_RadioDone = false;
@@ -46,6 +47,7 @@ void ZPOKeretti_Init()
 	s_ParallelIndex = 0;
 	s_CurrentPhase = PHASE_MINEDOOR;
 	s_MineDoorDone = false;
+	s_WarehouseButtonPressed = false;
 	s_WarehouseDoorDone = false;
 	s_RadioButtonPressed = false;
 	s_RadioDone = false;
@@ -100,6 +102,17 @@ void ZPOKeretti_Init()
 	}
 
 	HookSingleEntityOutput(warehouseButton, "OnPressed", ZPOKeretti_OnWarehouseDoorButtonPressed, true);
+
+	// Phase 1 (WarehouseDoor) completion: last path_track fires OnPass when the door stops fully open.
+	int doorTrackEnd = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "tracktrain_wearhouse_track2");
+
+	if (doorTrackEnd == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_keretti: Failed to find tracktrain_wearhouse_track2 path_track!");
+		return;
+	}
+
+	HookSingleEntityOutput(doorTrackEnd, "OnPass", ZPOKeretti_OnWarehouseDoorOpened, true);
 
 	// Phase 2 (Radio) button press.
 	int radioButton = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "func_button", "obj2_button");
@@ -277,7 +290,7 @@ static void ZPOKeretti_OnMineDoorOpened(const char[] output, int caller, int act
  * Summary: Open the warehouse door.
  * Entity: func_button
  * Bot action: USE_BUTTON
- * Confirmation: fixed timer after the button press
+ * Confirmation: last path_track's OnPass output
  */
 static void ZPOKeretti_StartWarehouseDoorPhase()
 {
@@ -296,6 +309,13 @@ static void ZPOKeretti_StartWarehouseDoorPhase()
 	s_CurrentPhase = PHASE_WAREHOUSE;
 	ZPOKeretti_ChatMsgSurvivors("Everyone get to the radio!");
 
+	// Door already moving: roam until it stops.
+	if (s_WarehouseButtonPressed)
+	{
+		NavBotZPSModInterface.ResetObjective();
+		return;
+	}
+
 	int button = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", 101494);
 
 	if (button == INVALID_ENT_REFERENCE)
@@ -311,7 +331,7 @@ static void ZPOKeretti_StartWarehouseDoorPhase()
 
 static void ZPOKeretti_OnWarehouseDoorButtonPressed(const char[] output, int caller, int activator, float delay)
 {
-	s_WarehouseDoorDone = true;
+	s_WarehouseButtonPressed = true;
 
 	if (s_CurrentPhase != PHASE_WAREHOUSE)
 	{
@@ -319,11 +339,17 @@ static void ZPOKeretti_OnWarehouseDoorButtonPressed(const char[] output, int cal
 	}
 
 	NavBotZPSModInterface.ResetObjective();
-	CreateTimer(10.0, ZPOKeretti_Timer_ActivateRadio, .flags = TIMER_FLAG_NO_MAPCHANGE);
 }
 
-static void ZPOKeretti_Timer_ActivateRadio(Handle timer)
+static void ZPOKeretti_OnWarehouseDoorOpened(const char[] output, int caller, int activator, float delay)
 {
+	s_WarehouseDoorDone = true;
+
+	if (s_CurrentPhase != PHASE_WAREHOUSE)
+	{
+		return;
+	}
+
 	ZPOKeretti_ActivateRadioButton();
 }
 
