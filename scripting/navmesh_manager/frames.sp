@@ -4,18 +4,14 @@ void Frame_LoadNavMesh()
 	NavBotNavMesh.Load();
 }
 
-void Frame_DownloadPlaceDBFile()
+void Frame_ParsePlaceDBFile(any data)
 {
-	DownloadNavMeshPlaceDB(false);
-}
+	char path[PLATFORM_MAX_PATH];
+	DataPack dp = view_as<DataPack>(data);
+	dp.Reset();
+	dp.ReadString(path, path.size);
+	delete dp;
 
-void Frame_DownloadSettingsFile()
-{
-	DownloadNavMeshMapSettingsFile(false);
-}
-
-void Frame_ParsePlaceDBFile()
-{
 	SMCParser parser = new SMCParser();
 	parser.OnStart = PlaceDBParser_Start;
 	parser.OnEnterSection = PlaceDBParser_NewSection;
@@ -24,7 +20,7 @@ void Frame_ParsePlaceDBFile()
 
 	int line;
 	int col;
-	SMCError error = parser.ParseFile(g_placedbfilepath, line, col);
+	SMCError error = parser.ParseFile(path, line, col);
 	delete parser;
 
 	if (error != SMCError_Okay)
@@ -50,6 +46,6 @@ void Frame_ParsePlaceDBFile()
 	{
 		char buffer[256];
 		g_placeIncludes.GetString(i, buffer, sizeof(buffer));
-		DownloadNavMeshPlaceDBIncludeFile(buffer, i);
+		DownloadNavMeshPlaceDBIncludeFile(buffer);
 	}
 }
