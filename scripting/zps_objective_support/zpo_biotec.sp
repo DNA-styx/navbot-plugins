@@ -12,13 +12,31 @@ static float ZPOBiotec_GetDetectionRadius()
 	return g_DetectionRadius * 2.0;
 }
 
-static void ZPOBiotec_OnAntiVirusTaken(const char[] output, int caller, int activator, float delay)
+static void ZPOBiotec_OnHelipadDoorOpened(const char[] output, int caller, int activator, float delay)
 {
 	NavBotZPSModInterface.ResetObjective();
 
 	float helipad[3] = { -2305.0, -1648.0, 256.0 };
 	NavBotZPSModInterface.SetObjectiveMoveGoal(helipad);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVETO);
+}
+
+static void ZPOBiotec_OnAntiVirusTaken(const char[] output, int caller, int activator, float delay)
+{
+	NavBotZPSModInterface.ResetObjective();
+
+	// The map unlocks and opens the locked 'dr' doors to the helipad from this same pickup.
+	// A MOVETO issued now is computed while they are still shut and fails, so wait for them to fully open.
+	const int hammerid = 297302;
+	int door = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_door_rotating", hammerid);
+
+	if (door == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_biotec: Failed to find the helipad func_door_rotating! Hammer ID: %i", hammerid);
+		return;
+	}
+
+	HookSingleEntityOutput(door, "OnFullyOpen", ZPOBiotec_OnHelipadDoorOpened, true);
 }
 
 static void ZPOBiotec_OnAntiVirusKeypadPressed(const char[] output, int caller, int activator, float delay)
