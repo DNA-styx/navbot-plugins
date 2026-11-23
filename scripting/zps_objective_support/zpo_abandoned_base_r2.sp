@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_abandoned_base_r2 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.6.1
+ * Module version: 0.6.2
  * Author: Claude.ai guided by DNA.styx
  *
  * Status:
@@ -199,7 +199,7 @@ static void ZPOAbandonedBaseR2_OnArmoryDoorOpen(const char[] output, int caller,
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 	HookSingleEntityOutput(trigger, "OnTrigger", ZPOAbandonedBaseR2_OnGreenRoomReached, true);
 }
 
@@ -299,7 +299,7 @@ static void ZPOAbandonedBaseR2_OnVentBroken(const char[] output, int caller, int
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 	HookSingleEntityOutput(trigger, "OnTrigger", ZPOAbandonedBaseR2_OnControlRoomTriggered, true);
 }
 
@@ -347,7 +347,7 @@ static void ZPOAbandonedBaseR2_OnControlRoomGlassBroken(const char[] output, int
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 	HookSingleEntityOutput(trigger, "OnTrigger", ZPOAbandonedBaseR2_OnGateTriggered, true);
 }
 
@@ -602,5 +602,5 @@ static void ZPOAbandonedBaseR2_OnFinalDoorOpened(const char[] output, int caller
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(helicopter);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }

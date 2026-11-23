@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_harvest map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.33.0
+ * Module version: 0.33.1
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: Usable
@@ -439,7 +439,7 @@ static void ZPOHarvest_OnSearchlightPressed(const char[] output, int caller, int
 	{
 		NavBotZPSModInterface.ResetObjective();
 		NavBotZPSModInterface.SetObjectiveGenericTargetEntity(escape);
-		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 	}
 	else
 	{

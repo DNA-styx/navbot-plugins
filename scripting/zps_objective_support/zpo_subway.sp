@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_subway map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.1.2
+ * Module version: 0.1.3
  * Author: Claude.ai guided by DNA.styx
  *
  * Status:
@@ -161,7 +161,7 @@ static void ZPOSubway_WaitForGenerator(const char[] output, int caller, int acti
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(door);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 	HookSingleEntityOutput(door, "OnFullyOpen", ZPOSubway_PowerSecondGenerator, true);
 }
 
@@ -222,7 +222,7 @@ static void ZPOSubway_FindSecurityRoom(const char[] output, int caller, int acti
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(beacon);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 	HookSingleEntityOutput(trigger, "OnStartTouch", ZPOSubway_BreakSecurityDoor, true);
 }
 
@@ -369,7 +369,7 @@ static void ZPOSubway_BoardTrain(const char[] output, int caller, int activator,
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(seat);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 	HookSingleEntityOutput(track, "OnPass", ZPOSubway_OpenTunnel, true);
 }
 
@@ -430,5 +430,5 @@ static void ZPOSubway_EscapeTunnel(const char[] output, int caller, int activato
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(beacon);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }

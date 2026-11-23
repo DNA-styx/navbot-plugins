@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_murksville map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.16.3
+ * Module version: 0.16.4
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: WIP
@@ -70,7 +70,7 @@ static void ZPOMurksville_PushCart()
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 
 	HookSingleEntityOutput(door, "OnFullyOpen", ZPOMurksville_PushPump, true);
 }
@@ -104,7 +104,7 @@ static void ZPOMurksville_PushPump(const char[] output, int caller, int activato
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 
 	HookSingleEntityOutput(pathEnd, "OnPass", ZPOMurksville_WaitForDrain, true);
 }
@@ -343,7 +343,7 @@ static void ZPOMurksville_BoardBoat(const char[] output, int caller, int activat
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(button);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 
 	s_bWaitingForBoatReady = true;
 }
@@ -405,5 +405,5 @@ static void ZPOMurksville_Escape(const char[] output, int caller, int activator,
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(boat);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }

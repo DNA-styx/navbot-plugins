@@ -3,7 +3,7 @@
  *
  * NavBot ZPS objective support module for the zpo_corpsington map.
  *
- * Module version: 0.14.2
+ * Module version: 0.14.3
  * Author: Claude.ai guided by DNA.styx
  *
  * Status:
@@ -189,7 +189,7 @@ static void ZPOCorpsington_GetInsideUpperFloor(const char[] output, int caller, 
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 	HookSingleEntityOutput(trigger, "OnStartTouch", ZPOCorpsington_PushGenerator, true);
 }
 
@@ -224,7 +224,7 @@ static void ZPOCorpsington_PushGenerator(const char[] output, int caller, int ac
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(button);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 	HookSingleEntityOutput(track, "OnPass", ZPOCorpsington_PullLever, true);
 }
 
@@ -283,7 +283,7 @@ static void ZPOCorpsington_CloseDoors(const char[] output, int caller, int activ
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(button);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 	HookSingleEntityOutput(door, "OnOpen", ZPOCorpsington_PressSafehouseButton, true);
 }
 

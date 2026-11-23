@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_residentevil_mov_zb_dc6 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.5.1
+ * Module version: 0.5.2
  * Author: Claude.ai guided by DNA.styx
  *
  * Status:
@@ -172,7 +172,7 @@ static void ZPOResidentEvilDC6_BoardTrain(const char[] output, int caller, int a
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(button);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 	HookSingleEntityOutput(button, "OnPressed", ZPOResidentEvilDC6_RideTrain, true);
 	CreateTimer(15.0, ZPOResidentEvilDC6_StartTrain, EntIndexToEntRef(button), TIMER_FLAG_NO_MAPCHANGE);
 }
@@ -233,7 +233,7 @@ static void ZPOResidentEvilDC6_RideTrain(const char[] output, int caller, int ac
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(button);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 	HookSingleEntityOutput(track, "OnPass", ZPOResidentEvilDC6_PlantCharge, true);
 }
 

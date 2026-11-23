@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_tommipanic_zb_v12 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.4.1
+ * Module version: 0.4.2
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: Unusable
@@ -127,7 +127,7 @@ static void ZPOTommiPanic_GoToRooftops(const char[] output, int caller, int acti
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 /**
@@ -171,7 +171,7 @@ static void ZPOTommiPanic_WaitForBarrels(const char[] output, int caller, int ac
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(crate);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 /**
@@ -197,7 +197,7 @@ static void ZPOTommiPanic_JumpInPool(const char[] output, int caller, int activa
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 /**
@@ -257,7 +257,7 @@ static void ZPOTommiPanic_EnterSewers(const char[] output, int caller, int activ
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 /**
@@ -358,7 +358,7 @@ static void ZPOTommiPanic_FillGascan()
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(gascan);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 /**
@@ -440,7 +440,7 @@ static void ZPOTommiPanic_FuelBoat(const char[] output, int caller, int activato
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(gascan);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 /**
@@ -474,7 +474,7 @@ static void ZPOTommiPanic_ChargeBattery(const char[] output, int caller, int act
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(battery);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 /**
@@ -551,5 +551,5 @@ static void ZPOTommiPanic_RideBoat(const char[] output, int caller, int activato
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(seat);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }

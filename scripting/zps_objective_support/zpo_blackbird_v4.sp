@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_blackbird_v4 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.3.1
+ * Module version: 0.3.2
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: {good / usable / partially complete / unusable}
@@ -432,7 +432,7 @@ static void ZPOBlackbird_ActivatePushCrates(const char[] output, int caller, int
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 /**
@@ -462,7 +462,7 @@ static void ZPOBlackbird_ActivatePushUnit(const char[] output, int caller, int a
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 // Fires when the unit reaches the end of its track.

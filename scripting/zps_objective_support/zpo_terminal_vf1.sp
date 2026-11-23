@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_terminal_vf1 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.9.4
+ * Module version: 0.9.5
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: WIP. Search for and use Keycard. Find food. Find and guard Bus 
@@ -348,7 +348,7 @@ static void ZPOTerminal_MoveToNextCorpse()
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(entity);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 // Finds this case's 5 capture points and hooks them all upfront.
@@ -957,7 +957,7 @@ static void ZPOTerminal_PushHumvee(const char[] output, int caller, int activato
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 /**
@@ -1027,7 +1027,7 @@ static void ZPOTerminal_Escape(const char[] output, int caller, int activator, f
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 // Bus destroyed - case_planb picks a zombie win or the metro escape.
@@ -1118,5 +1118,5 @@ static void ZPOTerminal_BoardTrain(const char[] output, int caller, int activato
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(beacon);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }

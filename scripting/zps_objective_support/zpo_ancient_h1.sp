@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_ancient_h1 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.5.1
+ * Module version: 0.5.2
  * Author: Claude.ai guided by DNA.styx
  *
  * Status:
@@ -179,7 +179,7 @@ static void ZPOAncientH1_ReachLadderRoom(const char[] output, int caller, int ac
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 /**
@@ -213,7 +213,7 @@ static void ZPOAncientH1_GoToFusebox(const char[] output, int caller, int activa
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(fusebox);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 /**
@@ -398,7 +398,7 @@ static void ZPOAncientH1_PushGenerator(const char[] output, int caller, int acti
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(pushTrigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 /**
