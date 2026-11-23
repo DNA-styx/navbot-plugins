@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_snowbound_dc_v3 map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.12.0
+ * Module version: 0.13.0
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: {good / usable / partially complete / unusable}
@@ -13,6 +13,15 @@
  */
 
 // Only Init() and Think() are called from outside this file.
+
+// Cable car chosen at random each round: 0 = CAR1, 1 = CAR2.
+static int s_Car;
+
+static const int s_SeatsHammerid[2] = { 761376, 761222 };
+static const int s_FilterDelayHammerid[2] = { 897371, 897378 };
+static const int s_LeverHammerid[2] = { 776952, 777072 };
+static const int s_TramHammerid[2] = { 12459, 249112 };
+static const int s_ArrivalHammerid[2] = { 163124, 163531 };
 
 void ZPOSnowboundDCv3_Init()
 {
@@ -170,14 +179,18 @@ static void ZPOSnowboundDCv3_ActivateHoldPosition(const char[] output, int calle
 
 /**
  * Phase: 4 - WaitForCar
- * Summary: Move to the CAR1 seats and wait for the lever to spawn.
+ * Summary: Pick a cable car at random, move to its seats and wait for the levers to spawn.
  * Entity: point_template, func_door
  * Bot action: MOVE_TO_ENTITY
  * Confirmation: tramlevers_temp fires OnEntitySpawned.
  */
 static void ZPOSnowboundDCv3_ActivateWaitForCar(const char[] output, int caller, int activator, float delay)
 {
-	ZPOSnowboundDCv3_ChatMsgSurvivors("Get to the cable cars!");
+	s_Car = GetRandomInt(0, 1);
+
+	char msg[64];
+	Format(msg, sizeof(msg), "Get to cable car %i!", s_Car + 1);
+	ZPOSnowboundDCv3_ChatMsgSurvivors(msg);
 
 	const int tramleversTempHammerid = 897036;
 	int tramleversTemp = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "point_template", tramleversTempHammerid);
@@ -190,48 +203,47 @@ static void ZPOSnowboundDCv3_ActivateWaitForCar(const char[] output, int caller,
 
 	HookSingleEntityOutput(tramleversTemp, "OnEntitySpawned", ZPOSnowboundDCv3_ActivatePullLever, true);
 
-	const int seatsHammerid = 761376;
-	int seats = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_door", seatsHammerid);
+	int seats = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_door", s_SeatsHammerid[s_Car]);
 
 	if (seats == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_snowbound_dc_v3: Failed to find tram1_seats! Hammer ID: %i", seatsHammerid);
+		LogError("zpo_snowbound_dc_v3: Failed to find tram%i_seats! Hammer ID: %i", s_Car + 1, s_SeatsHammerid[s_Car]);
 		return;
 	}
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(seats);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 /**
  * Phase: 5 - PullLever
- * Summary: Pull the CAR1 lever to send the cable car down.
+ * Summary: Pull the chosen car's lever to send it down.
  * Entity: func_rot_button, filter_activator_name
  * Bot action: USE_BUTTON
- * Confirmation: tram1filter_delay fires OnPass.
+ * Confirmation: the chosen car's filter_delay fires OnPass.
  */
 static void ZPOSnowboundDCv3_ActivatePullLever(const char[] output, int caller, int activator, float delay)
 {
-	ZPOSnowboundDCv3_ChatMsgSurvivors("The Car 1 lever is ready, pull it!");
+	char msg[64];
+	Format(msg, sizeof(msg), "The Car %i lever is ready, pull it!", s_Car + 1);
+	ZPOSnowboundDCv3_ChatMsgSurvivors(msg);
 
-	const int filterDelayHammerid = 897371;
-	int filterDelay = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "filter_activator_name", filterDelayHammerid);
+	int filterDelay = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "filter_activator_name", s_FilterDelayHammerid[s_Car]);
 
 	if (filterDelay == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_snowbound_dc_v3: Failed to find tram1filter_delay! Hammer ID: %i", filterDelayHammerid);
+		LogError("zpo_snowbound_dc_v3: Failed to find tram%ifilter_delay! Hammer ID: %i", s_Car + 1, s_FilterDelayHammerid[s_Car]);
 		return;
 	}
 
 	HookSingleEntityOutput(filterDelay, "OnPass", ZPOSnowboundDCv3_ActivateRideCar, true);
 
-	const int leverHammerid = 776952;
-	int lever = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_rot_button", leverHammerid);
+	int lever = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_rot_button", s_LeverHammerid[s_Car]);
 
 	if (lever == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_snowbound_dc_v3: Failed to find tram1button! Hammer ID: %i", leverHammerid);
+		LogError("zpo_snowbound_dc_v3: Failed to find tram%ibutton! Hammer ID: %i", s_Car + 1, s_LeverHammerid[s_Car]);
 		return;
 	}
 
@@ -242,55 +254,54 @@ static void ZPOSnowboundDCv3_ActivatePullLever(const char[] output, int caller, 
 
 /**
  * Phase: 6 - RideCar
- * Summary: Move to the CAR1 seats to board before the car leaves.
+ * Summary: Move to the chosen car's seats to board before it leaves.
  * Entity: func_door, func_tracktrain
  * Bot action: MOVE_TO_ENTITY
- * Confirmation: tram1 fires OnStart.
+ * Confirmation: the chosen car fires OnStart.
  */
 static void ZPOSnowboundDCv3_ActivateRideCar(const char[] output, int caller, int activator, float delay)
 {
-	ZPOSnowboundDCv3_ChatMsgSurvivors("Car 1 is leaving, get on board!");
+	char msg[64];
+	Format(msg, sizeof(msg), "Car %i is leaving, get on board!", s_Car + 1);
+	ZPOSnowboundDCv3_ChatMsgSurvivors(msg);
 
-	const int tram1Hammerid = 12459;
-	int tram1 = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_tracktrain", tram1Hammerid);
+	int tram = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_tracktrain", s_TramHammerid[s_Car]);
 
-	if (tram1 == INVALID_ENT_REFERENCE)
+	if (tram == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_snowbound_dc_v3: Failed to find tram1! Hammer ID: %i", tram1Hammerid);
+		LogError("zpo_snowbound_dc_v3: Failed to find tram%i! Hammer ID: %i", s_Car + 1, s_TramHammerid[s_Car]);
 		return;
 	}
 
-	HookSingleEntityOutput(tram1, "OnStart", ZPOSnowboundDCv3_ActivateDescend, true);
+	HookSingleEntityOutput(tram, "OnStart", ZPOSnowboundDCv3_ActivateDescend, true);
 
-	const int seatsHammerid = 761376;
-	int seats = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_door", seatsHammerid);
+	int seats = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_door", s_SeatsHammerid[s_Car]);
 
 	if (seats == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_snowbound_dc_v3: Failed to find tram1_seats! Hammer ID: %i", seatsHammerid);
+		LogError("zpo_snowbound_dc_v3: Failed to find tram%i_seats! Hammer ID: %i", s_Car + 1, s_SeatsHammerid[s_Car]);
 		return;
 	}
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(seats);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 /**
  * Phase: 7 - Descend
- * Summary: Ride CAR1 down with no objective set.
+ * Summary: Ride the chosen car down with no objective set.
  * Entity: path_track
  * Bot action: none (ResetObjective only)
- * Confirmation: train1 3 path_track fires OnPass on arrival.
+ * Confirmation: the chosen car's bottom path_track fires OnPass on arrival.
  */
 static void ZPOSnowboundDCv3_ActivateDescend(const char[] output, int caller, int activator, float delay)
 {
-	const int arrivalHammerid = 163124;
-	int arrivalNode = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "path_track", arrivalHammerid);
+	int arrivalNode = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "path_track", s_ArrivalHammerid[s_Car]);
 
 	if (arrivalNode == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_snowbound_dc_v3: Failed to find train1 3 path_track! Hammer ID: %i", arrivalHammerid);
+		LogError("zpo_snowbound_dc_v3: Failed to find train%i 3 path_track! Hammer ID: %i", s_Car + 1, s_ArrivalHammerid[s_Car]);
 		return;
 	}
 
@@ -308,7 +319,7 @@ static void ZPOSnowboundDCv3_ActivateDescend(const char[] output, int caller, in
  */
 static void ZPOSnowboundDCv3_ActivatePushBarricade(const char[] output, int caller, int activator, float delay)
 {
-	ZPOSnowboundDCv3_ChatMsgSurvivors("Car 1 has reached the bottom station!");
+	ZPOSnowboundDCv3_ChatMsgSurvivors("The cable car has reached the bottom station!");
 
 	const int pusherHammerid = 387177;
 	int pusher = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "trigger_multiple", pusherHammerid);
@@ -334,7 +345,7 @@ static void ZPOSnowboundDCv3_ActivatePushBarricade(const char[] output, int call
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(pusher);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
 
 /**
@@ -398,5 +409,5 @@ static void ZPOSnowboundDCv3_ActivateEscape(const char[] output, int caller, int
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(escape);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 }
