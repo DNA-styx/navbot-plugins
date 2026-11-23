@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_area41_v7f map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.8.2
+ * Module version: 0.10.0
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: Partially complete
@@ -12,9 +12,17 @@
  * Issues: In testing
  */
 
+static const int PLANK_HAMMERIDS[3] = { 1551723, 1551719, 1551715 };
+static bool s_PlankBroken[3];
+
 void ZPOArea41V7F_Init()
 {
 	g_ThinkFunc = ZPOArea41V7F_Think;
+
+	for (int i = 0; i < sizeof(s_PlankBroken); i++)
+	{
+		s_PlankBroken[i] = false;
+	}
 
 	ZPOArea41V7F_WaitForChinook();
 }
@@ -59,12 +67,78 @@ static void ZPOArea41V7F_WaitForChinook()
 
 /**
  * Phase: 1 - ChinookExit
+ * Summary: Break the planks on the toilet door.
+ * Entity: func_breakable
+ * Bot action: DESTROY_ENTITY, one plank at a time
+ * Confirmation: every plank broken or already gone
+ */
+static void ZPOArea41V7F_OnChinookExit(const char[] output, int caller, int activator, float delay)
+{
+	ZPOArea41V7F_ChatMsgSurvivors("Break the planks on the toilet door!");
+
+	for (int i = 0; i < sizeof(PLANK_HAMMERIDS); i++)
+	{
+		int plank = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_breakable", PLANK_HAMMERIDS[i]);
+
+		if (plank != INVALID_ENT_REFERENCE)
+		{
+			HookSingleEntityOutput(plank, "OnBreak", ZPOArea41V7F_OnPlankBroken, true);
+		}
+	}
+
+	ZPOArea41V7F_TargetNextPlank();
+}
+
+static void ZPOArea41V7F_OnPlankBroken(const char[] output, int caller, int activator, float delay)
+{
+	int hammerid = GetEntProp(caller, Prop_Data, "m_iHammerID");
+
+	for (int i = 0; i < sizeof(PLANK_HAMMERIDS); i++)
+	{
+		if (hammerid == PLANK_HAMMERIDS[i])
+		{
+			s_PlankBroken[i] = true;
+		}
+	}
+
+	ZPOArea41V7F_TargetNextPlank();
+}
+
+// A missing plank counts as broken.
+static void ZPOArea41V7F_TargetNextPlank()
+{
+	for (int i = 0; i < sizeof(PLANK_HAMMERIDS); i++)
+	{
+		if (s_PlankBroken[i])
+		{
+			continue;
+		}
+
+		int plank = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_breakable", PLANK_HAMMERIDS[i]);
+
+		if (plank == INVALID_ENT_REFERENCE)
+		{
+			s_PlankBroken[i] = true;
+			continue;
+		}
+
+		NavBotZPSModInterface.ResetObjective();
+		NavBotZPSModInterface.SetObjectiveGenericTargetEntity(plank);
+		NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_DESTROY_ENTITY);
+		return;
+	}
+
+	ZPOArea41V7F_FlushToilet();
+}
+
+/**
+ * Phase: 2 - FlushToilet
  * Summary: Press the flush button.
  * Entity: func_button
  * Bot action: USE_BUTTON
  * Confirmation: the flush button's OnPressed
  */
-static void ZPOArea41V7F_OnChinookExit(const char[] output, int caller, int activator, float delay)
+static void ZPOArea41V7F_FlushToilet()
 {
 	const int hammerid = 730833;
 	int button = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "func_button", hammerid);
@@ -77,6 +151,7 @@ static void ZPOArea41V7F_OnChinookExit(const char[] output, int caller, int acti
 
 	ZPOArea41V7F_ChatMsgSurvivors("Find the toilet and flush it!");
 
+	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveUseButton(button);
 	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_USE_BUTTON);
 
@@ -84,7 +159,7 @@ static void ZPOArea41V7F_OnChinookExit(const char[] output, int caller, int acti
 }
 
 /**
- * Phase: 2 - FlushButtonPressed
+ * Phase: 3 - FlushButtonPressed
  * Summary: Move to the lift shaft.
  * Entity: path_track
  * Bot action: MOVETO fixed position
@@ -113,7 +188,7 @@ static void ZPOArea41V7F_OnFlushButtonPressed(const char[] output, int caller, i
 }
 
 /**
- * Phase: 3 - ElevatorAtTop
+ * Phase: 4 - ElevatorAtTop
  * Summary: Get on the lift.
  * Entity: func_tracktrain, func_door
  * Bot action: MOVE_TO_ENTITY
@@ -141,13 +216,13 @@ static void ZPOArea41V7F_OnElevatorAtTop(const char[] output, int caller, int ac
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(lift);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 
 	HookSingleEntityOutput(gate, "OnFullyOpen", ZPOArea41V7F_OnElevatorAtBottom, true);
 }
 
 /**
- * Phase: 4 - ElevatorAtBottom
+ * Phase: 5 - ElevatorAtBottom
  * Summary: Press the tunnel door button.
  * Entity: func_button, func_door
  * Bot action: USE_BUTTON
@@ -182,7 +257,7 @@ static void ZPOArea41V7F_OnElevatorAtBottom(const char[] output, int caller, int
 }
 
 /**
- * Phase: 5 - TunnelDoorOpen
+ * Phase: 6 - TunnelDoorOpen
  * Summary: Press the hacking panel button.
  * Entity: func_button
  * Bot action: USE_BUTTON
@@ -208,7 +283,7 @@ static void ZPOArea41V7F_OnTunnelDoorOpen(const char[] output, int caller, int a
 }
 
 /**
- * Phase: 6 - Bt1OPressed
+ * Phase: 7 - Bt1OPressed
  * Summary: Hold the hacking capture point.
  * Entity: trigger_capturepoint_zp, func_door
  * Bot action: MOVE_TO_ENTITY
@@ -237,13 +312,13 @@ static void ZPOArea41V7F_OnBt1OPressed(const char[] output, int caller, int acti
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(captureTrigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 
 	HookSingleEntityOutput(door, "OnOpen", ZPOArea41V7F_UseKeycard, true);
 }
 
 /**
- * Phase: 7 - UseKeycard
+ * Phase: 8 - UseKeycard
  * Summary: Find the keys in the security room and use them on the door panel.
  * Entity: item_deliver, trigger_useable
  * Bot action: USE_ITEM
@@ -280,7 +355,7 @@ static void ZPOArea41V7F_UseKeycard(const char[] output, int caller, int activat
 }
 
 /**
- * Phase: 8 - KeycardUsed
+ * Phase: 9 - KeycardUsed
  * Summary: Press the blast door button.
  * Entity: func_button
  * Bot action: USE_BUTTON
@@ -306,11 +381,11 @@ static void ZPOArea41V7F_OnKeycardUsed(const char[] output, int caller, int acti
 }
 
 /**
- * Phase: 9 - DoorButtonPressed
+ * Phase: 10 - DoorButtonPressed
  * Summary: Wait for the blast doors to open.
  * Entity: func_door
  * Bot action: none (roam)
- * Confirmation: the inner blast door's OnOpen
+ * Confirmation: the inner blast door's OnFullyOpen
  */
 static void ZPOArea41V7F_OnDoorButtonPressed(const char[] output, int caller, int activator, float delay)
 {
@@ -327,11 +402,47 @@ static void ZPOArea41V7F_OnDoorButtonPressed(const char[] output, int caller, in
 
 	NavBotZPSModInterface.ResetObjective();
 
-	HookSingleEntityOutput(door, "OnOpen", ZPOArea41V7F_OnBlastDoorOpen, true);
+	HookSingleEntityOutput(door, "OnFullyOpen", ZPOArea41V7F_MoveToGeneratorRoom, true);
 }
 
 /**
- * Phase: 10 - BlastDoorOpen
+ * Phase: 11 - MoveToGeneratorRoom
+ * Summary: Go to the generator room doors.
+ * Entity: prop_door_rotating, trigger_once
+ * Bot action: MOVE_TO_ENTITY
+ * Confirmation: the generator room doorway trigger's OnTrigger
+ */
+static void ZPOArea41V7F_MoveToGeneratorRoom(const char[] output, int caller, int activator, float delay)
+{
+	const int doorHammerid = 1467686;
+	int door = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "prop_door_rotating", doorHammerid);
+
+	if (door == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_area41_v7f: Failed to find DoubleDoorsGen1 prop_door_rotating! Hammer ID: %i", doorHammerid);
+		return;
+	}
+
+	const int triggerHammerid = 2232239;
+	int trigger = FindEntityOfHammerID(INVALID_ENT_REFERENCE, "trigger_once", triggerHammerid);
+
+	if (trigger == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_area41_v7f: Failed to find generator room trigger_once! Hammer ID: %i", triggerHammerid);
+		return;
+	}
+
+	ZPOArea41V7F_ChatMsgSurvivors("Head for the generator room!");
+
+	NavBotZPSModInterface.ResetObjective();
+	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(door);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
+
+	HookSingleEntityOutput(trigger, "OnTrigger", ZPOArea41V7F_OnBlastDoorOpen, true);
+}
+
+/**
+ * Phase: 12 - GeneratorRoomReached
  * Summary: Pull the first generator lever.
  * Entity: func_button, math_counter
  * Bot action: USE_BUTTON
@@ -367,7 +478,7 @@ static void ZPOArea41V7F_OnBlastDoorOpen(const char[] output, int caller, int ac
 }
 
 /**
- * Phase: 11 - FirstLeverPressed
+ * Phase: 13 - FirstLeverPressed
  * Summary: Pull the second generator lever.
  * Entity: func_button
  * Bot action: USE_BUTTON
@@ -392,7 +503,7 @@ static void ZPOArea41V7F_OnFirstLeverPressed(const char[] output, int caller, in
 }
 
 /**
- * Phase: 12 - GeneratorOn
+ * Phase: 14 - GeneratorOn
  * Summary: Call the cargo lift.
  * Entity: func_button
  * Bot action: USE_BUTTON
@@ -418,7 +529,7 @@ static void ZPOArea41V7F_OnGeneratorOn(const char[] output, int caller, int acti
 }
 
 /**
- * Phase: 13 - LiftCalled
+ * Phase: 15 - LiftCalled
  * Summary: Wait for the cargo lift.
  * Entity: func_button
  * Bot action: none (roam)
