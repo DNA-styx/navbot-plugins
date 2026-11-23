@@ -4,7 +4,7 @@
  * NavBot ZPS objective support module for the zpo_tanker map.
  * Intended to be #included by zps_objective_support.sp.
  *
- * Module version: 0.31.9
+ * Module version: 0.31.11
  * Author: Claude.ai guided by DNA.styx
  *
  * Status: {good / usable / partially complete / unusable}
@@ -39,7 +39,7 @@ void ZPOTanker_Init()
 	s_bWaitingForArmTrigger = false;
 	s_iRoundSerial++;
 
-	ZPOTanker_HookIslandKill();
+	ZPOTanker_HookBoatLaunch();
 	ZPOTanker_ActivateInvestigate();
 }
 
@@ -71,7 +71,7 @@ static void ZPOTanker_ActivateInvestigate()
 
 	NavBotZPSModInterface.ResetObjective();
 	NavBotZPSModInterface.SetObjectiveGenericTargetEntity(trigger);
-	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_MOVE_TO_ENTITY);
+	NavBotZPSModInterface.SetCurrentObjective(NAVBOT_ZPS_OBJECTIVE_MOVE_TO_ENTITY);
 
 	HookSingleEntityOutput(trigger, "OnStartTouch", ZPOTanker_ActivateDestroyPCP, true);
 }
@@ -234,7 +234,7 @@ static void ZPOTanker_OnC4ButtonPressed(const char[] output, int caller, int act
 {
 	NavBotZPSModInterface.ResetObjective();
 
-	float goal[3] = { 4332.3, -6540.3, 304.0 };
+	float goal[3] = { 4332.3, -6540.3, 240.0 };
 
 	NavBotZPSModInterface.SetObjectiveMoveGoal(goal);
 	CanAllBotsReachGoal(goal);
@@ -379,8 +379,10 @@ static void ZPOTanker_OnHatchButtonPressed(const char[] output, int caller, int 
 
 /**
  * Phase: 8 - EscapeToBoats
- * Summary: Press lifeboat button until engine starts.
- * Entity: func_button
+ * Summary: Press lifeboat button until engine starts. Once either boat is
+ *   moving, zombies switch to the water spawns and 1s later all bots on
+ *   both teams are killed.
+ * Entity: func_button, path_track
  * Bot action: USE_BUTTON
  * Confirmation: Button's name changing to "Zero".
  */
@@ -401,35 +403,73 @@ static void ZPOTanker_ActivateEscapeToBoats()
 }
 
 // Hooked from Init() so the kill does not depend on earlier phase hooks.
-// The .as script only switches zombies to the water spawns (ZombieSpawns(6))
-// when a survivor touches Island-Trigger; the kill is delayed until after that.
-static void ZPOTanker_HookIslandKill()
+// Either boat passing its second track node means it has started moving.
+static void ZPOTanker_HookBoatLaunch()
 {
-	int trigger = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "trigger_multiple", "Island-Trigger");
+	int track1 = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "lifeboat1_track2");
 
-	if (trigger == INVALID_ENT_REFERENCE)
+	if (track1 == INVALID_ENT_REFERENCE)
 	{
-		LogError("zpo_tanker: Failed to find Island-Trigger!");
-		return;
+		LogError("zpo_tanker: Failed to find lifeboat1_track2!");
+	}
+	else
+	{
+		HookSingleEntityOutput(track1, "OnPass", ZPOTanker_OnBoatLaunched, true);
 	}
 
-	HookSingleEntityOutput(trigger, "OnStartTouch", ZPOTanker_OnIslandTouched, false);
+	int track2 = FindNamedEntityOfClassname(INVALID_ENT_REFERENCE, "path_track", "lifeboat2_track2");
+
+	if (track2 == INVALID_ENT_REFERENCE)
+	{
+		LogError("zpo_tanker: Failed to find lifeboat2_track2!");
+	}
+	else
+	{
+		HookSingleEntityOutput(track2, "OnPass", ZPOTanker_OnBoatLaunched, true);
+	}
 }
 
-static void ZPOTanker_OnIslandTouched(const char[] output, int caller, int activator, float delay)
+static void ZPOTanker_OnBoatLaunched(const char[] output, int caller, int activator, float delay)
 {
 	if (s_bBotsKilled)
 	{
 		return;
 	}
 
-	if (activator < 1 || activator > MaxClients || !IsClientInGame(activator) || GetClientTeam(activator) != 2)
+	s_bBotsKilled = true;
+
+	ZPOTanker_SwitchToWaterSpawns();
+	CreateTimer(1.0, ZPOTanker_Timer_KillBots, s_iRoundSerial, TIMER_FLAG_NO_MAPCHANGE);
+}
+
+// Enables ZS-Final before disabling the other ZS- spawns, so a zombie spawn
+// is always enabled.
+static void ZPOTanker_SwitchToWaterSpawns()
+{
+	char name[32];
+	int spawn = INVALID_ENT_REFERENCE;
+
+	while ((spawn = FindEntityByClassname(spawn, "info_player_zombie")) != INVALID_ENT_REFERENCE)
 	{
-		return;
+		GetEntPropString(spawn, Prop_Data, "m_iName", name, sizeof(name));
+
+		if (StrEqual(name, "ZS-Final"))
+		{
+			AcceptEntityInput(spawn, "EnableSpawn");
+		}
 	}
 
-	s_bBotsKilled = true;
-	CreateTimer(1.0, ZPOTanker_Timer_KillBots, s_iRoundSerial, TIMER_FLAG_NO_MAPCHANGE);
+	spawn = INVALID_ENT_REFERENCE;
+
+	while ((spawn = FindEntityByClassname(spawn, "info_player_zombie")) != INVALID_ENT_REFERENCE)
+	{
+		GetEntPropString(spawn, Prop_Data, "m_iName", name, sizeof(name));
+
+		if (strncmp(name, "ZS-", 3) == 0 && !StrEqual(name, "ZS-Final"))
+		{
+			AcceptEntityInput(spawn, "DisableSpawn");
+		}
+	}
 }
 
 static Action ZPOTanker_Timer_KillBots(Handle timer, int roundSerial)
@@ -498,9 +538,7 @@ static void ZPOTanker_PollLifeboat1Launch()
 /**
  * Phase: 9 - ReachIsland
  * Summary: The bot is carried to the island automatically by the boat,
- *   then moves further inland. 1s after the first survivor touches
- *   Island-Trigger, all bots on both teams are killed; zombies respawn at
- *   the water spawns between the boats and the island.
+ *   then moves further inland.
  * Entity: trigger_multiple
  * Bot action: MOVETO once the island is reached.
  * Confirmation: OnStartTouch.
