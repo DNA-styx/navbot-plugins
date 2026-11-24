@@ -1,123 +1,39 @@
 
-void OnNavMeshPlaceDBFileDownloadRequestCompleted(HTTPStatus status, any value, const char[] error)
+
+static void UnpackRequestData(DataPack dp, RequestData data)
 {
-	if (status != HTTPStatus_OK)
-	{
-		if (status == HTTPStatus_NotFound)
-		{
-			// if we attempted to download a map with a unique workshop ID, try download again but without the unique ID.
-			if (g_wasuniquemap)
-			{
-				DeletePlaceDBFile();
-				// try again but don't download maps with unique names.
-				DownloadNavMeshPlaceDB(true);
-				return;
-			}
-
-			DeletePlaceDBFile();
-			// just load the nav mesh, the map probably doesn't have one
-			RequestFrame(Frame_LoadNavMesh);
-			return;
-		}
-
-		DeletePlaceDBFile();
-		RequestFrame(Frame_LoadNavMesh);
-		LogError("Failed to download nav mesh place database file. HTTP status code \"%i\". Error: %s", view_as<int>(status), error);
-		return;
-	}
-
-	RequestFrame(Frame_ParsePlaceDBFile);
+	dp.Reset();
+	dp.ReadString(data.downloadpath, data.downloadpath.size);
+	data.uniquename = dp.ReadCell();
+	data.ondone = dp.ReadFunction();
+	delete dp;
 }
 
-void OnNavMeshPlaceDBIncludeDownloadCompleted(HTTPStatus status, any value, const char[] error)
+void OnHTTPRequestCompleted(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any data1)
 {
-	g_includesDownloaded++;
-	char name[256];
-	g_placeIncludes.GetString(view_as<int>(value), name, sizeof(name));
+	SteamWorksHTTPRequest http = view_as<SteamWorksHTTPRequest>(hRequest);
+	RequestData data;
+	UnpackRequestData(view_as<DataPack>(data1), data);
 
-	if (g_includesDownloaded >= g_placeIncludes.Length)
-	{
-		RequestFrame(Frame_LoadNavMesh);
-		return;
-	}
+	VerboseLog("HTTP request completed: Failure %i Successful %i Status Code %i File: %s", 
+	view_as<int>(bFailure), view_as<int>(bRequestSuccessful), view_as<int>(eStatusCode), data.downloadpath);
 
-	if (status != HTTPStatus_OK)
+	if (bRequestSuccessful)
 	{
-		DeletePlaceDBIncludeFile(name);
-		LogError("Failed to download nav mesh place database include file \"%s\". HTTP status code \"%i\". Error: %s", name, view_as<int>(status), error);
-		return;
-	}
-}
-
-void OnNavMeshFileDownloadRequestCompleted(HTTPStatus status, any value, const char[] error)
-{
-	if (status != HTTPStatus_OK)
-	{
-		if (status == HTTPStatus_NotFound)
+		if (eStatusCode == k_EHTTPStatusCode200OK)
 		{
-			// if we attempted to download a map with a unique workshop ID, try download again but without the unique ID.
-			if (g_wasuniquemap)
-			{
-				DeleteNavMeshFile();
-				// try again but don't download maps with unique names.
-				DownloadNavMeshFromMirror(true);
-				return;
-			}
-
-			// don't log 404 as errors, we don't expect mirrors to have all the maps.
-			LogMessage("Failed to download nav mesh file. File does not exists on mirror.");
-			DeleteNavMeshFile(); // don't save the 404 page as a navmesh file
-
-			if (cvar_auto_generate.BoolValue)
-			{
-				NavBotNavMesh.Generate();
-			}
-
-			return;
+			http.WriteResponseBodyToFile(data.downloadpath);
 		}
-
-		DeleteNavMeshFile();
-		LogError("Failed to download nav mesh file. HTTP status code \"%i\". Error: %s", view_as<int>(status), error);
-
-		if (cvar_auto_generate.BoolValue)
-		{
-			NavBotNavMesh.Generate();
-		}
-
-		return;
 	}
 
-	// this just helps finding nav mesh files that were downloaded from the net (includes URL and timestamp)
-	CreateAutoDownloadFile();
-	RequestFrame(Frame_DownloadSettingsFile);
-}
+	delete hRequest;
 
-
-void OnNavMeshSettingsFileDownloadCompleted(HTTPStatus status, any value, const char[] error)
-{
-	if (status != HTTPStatus_OK)
+	// call on done after the request handle was deleted
+	if (bRequestSuccessful)
 	{
-		if (status == HTTPStatus_NotFound)
-		{
-			// if we attempted to download a map with a unique workshop ID, try download again but without the unique ID.
-			if (g_wasuniquemap)
-			{
-				DeleteNavSettingsFile();
-				// try again but don't download maps with unique names.
-				DownloadNavMeshMapSettingsFile(true);
-				return;
-			}
-
-			DeleteNavSettingsFile();
-			RequestFrame(Frame_DownloadPlaceDBFile);
-			return;
-		}
-
-		DeleteNavSettingsFile();
-		LogError("Failed to download nav mesh map settings file. HTTP status code \"%i\". Error: %s", view_as<int>(status), error);
-		RequestFrame(Frame_DownloadPlaceDBFile);
-		return;
+		Call_StartFunction(null, data.ondone);
+		Call_PushCell(eStatusCode);
+		Call_PushCell(data.uniquename);
+		Call_Finish();
 	}
-
-	RequestFrame(Frame_DownloadPlaceDBFile);
 }

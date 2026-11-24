@@ -10,9 +10,9 @@ All features of this plugin are **OPT-IN**! You have to enable them in the confi
 - sm_nb_navmesh_manager_download_url: Base HTTP mirror URL. (Do not add a forward slash at the end of the url)
 - sm_nb_navmesh_manager_auto_gen: Enables automatic generation of nav mesh files.
 
-## Requirements
+## Optional Requirements
 
-Requires the [SourceMod REST in Pawn Extension](https://github.com/ErikMinekus/sm-ripext) for download nav mesh files.
+The [SteamWorks](https://github.com/alliedmodders/SM-SteamWorks) extension is needed for downloading nav mesh files.    
 
 ## NavMesh HTTP Mirror Format
 
