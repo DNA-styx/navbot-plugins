@@ -29,6 +29,9 @@ enum ZPOMap
 	MAP_ZPO_TOMMIPANIC_ZB_V12,
 	MAP_ZPO_SUBWAY,
 	MAP_ZPO_SILENT_SKIES_REMASTERED_V5,
+	MAP_ZPO_FACILITY_A9,
+	MAP_ZPO_AQUATICA,
+	MAP_ZPO_NESTS_V5,
 }
 
 static ZPOMap s_detectedMap = MAP_UNKNOWN;
@@ -140,6 +143,18 @@ void DetectObjectiveMap()
 	else if (strcmp(map, "zpo_silent_skies_remastered_v5") == 0)
 	{
 		s_detectedMap = MAP_ZPO_SILENT_SKIES_REMASTERED_V5;
+	}
+	else if (strcmp(map, "zpo_facility_a9") == 0)
+	{
+		s_detectedMap = MAP_ZPO_FACILITY_A9;
+	}
+	else if (strcmp(map, "zpo_aquatica") == 0)
+	{
+		s_detectedMap = MAP_ZPO_AQUATICA;
+	}
+	else if (strcmp(map, "zpo_nests_v5") == 0)
+	{
+		s_detectedMap = MAP_ZPO_NESTS_V5;
 	}
 	else
 	{
@@ -257,6 +272,18 @@ void InitObjectives()
 		case MAP_ZPO_SILENT_SKIES_REMASTERED_V5:
 		{
 			ZPOSilentSkiesRemasteredV5_Init();
+		}
+		case MAP_ZPO_FACILITY_A9:
+		{
+			ZPOFacilityA9_Init();
+		}
+		case MAP_ZPO_AQUATICA:
+		{
+			ZPOAquatica_Init();
+		}
+		case MAP_ZPO_NESTS_V5:
+		{
+			ZPONestsV5_Init();
 		}
 		default:
 		{

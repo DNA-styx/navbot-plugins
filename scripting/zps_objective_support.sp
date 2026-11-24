@@ -46,6 +46,9 @@ float g_DetectionRadius;
 #include "zps_objective_support/zpo_tommipanic_zb_v12.sp"
 #include "zps_objective_support/zpo_subway.sp"
 #include "zps_objective_support/zpo_silent_skies_remastered_v5.sp"
+#include "zps_objective_support/zpo_facility_a9.sp"
+#include "zps_objective_support/zpo_aquatica.sp"
+#include "zps_objective_support/zpo_nests_v5.sp"
 #include "zps_objective_support/common.sp"
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
